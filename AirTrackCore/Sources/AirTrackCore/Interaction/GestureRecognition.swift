@@ -41,6 +41,21 @@ public enum GestureKind: String, Equatable, Hashable, Sendable, CaseIterable {
     }
 }
 
+/// How well the current frame supports a gesture that is ALREADY committed.
+///
+/// Initiation and maintenance are different questions: starting needs the strict, stable pose
+/// (precision first); keeping a committed gesture only needs the absence of contradiction
+/// (temporal continuity first). Uncertainty holds the gesture briefly; only a clearly
+/// different pose ends it at once.
+public enum MaintenanceEvidence: String, Equatable, Sendable {
+    /// The fingers still show the gesture: it may produce output.
+    case supported
+    /// Not enough evidence either way (UNKNOWN fingers, blur, partial view): hold, no output.
+    case uncertain
+    /// A stable, clearly different pose (e.g. pointing, pinch): the gesture has ended.
+    case contradicted
+}
+
 /// "This looks like X": evidence only. Candidates never act; only the arbiter commits.
 public struct GestureCandidate: Equatable, Sendable {
     public var kind: GestureKind
@@ -55,8 +70,9 @@ public struct GestureCandidate: Equatable, Sendable {
     public var evidence: Double
     /// All commit conditions hold this frame.
     public var readyToCommit: Bool
-    /// The active gesture still has its pose (continuation), even if not ready to commit.
-    public var continuesActive: Bool
+    /// For the gesture that owns the interaction: this frame's maintenance evidence.
+    /// nil for a candidate that is not committed.
+    public var maintenance: MaintenanceEvidence?
 }
 
 public struct RecognitionContext: Sendable {
@@ -65,10 +81,13 @@ public struct RecognitionContext: Sendable {
     public var stablePose: HandPose
     public var rawPose: HandPose
     public var history: FeatureHistory
-    /// Gesture currently owning the interaction (continuation rules apply to it).
+    /// Gesture currently owning the interaction (maintenance rules apply to it).
     public var activeKind: GestureKind?
     /// Start time of the current candidate, per kind (from the arbiter).
     public var candidateSince: [GestureKind: TimeInterval]
+    /// New gestures may start only with FULL tracking (strict features, fresh stable pose).
+    /// PARTIAL / INDEX observations can only keep a gesture that is already committed.
+    public var canInitiate: Bool = true
 }
 
 /// Stateless: all memory lives in the arbiter and the history, so recognizers are pure
@@ -90,9 +109,10 @@ public struct ScrollRecognizerConfiguration: Equatable, Sendable {
     public init() {}
 }
 
-/// Two-finger and open-hand vertical scroll. Entry needs the STABLE pose (hysteresis) and
-/// vertically dominant travel; an active scroll only needs its fingers to keep the pose
-/// (relaxed rules, so one uncertain finger does not break a scroll in progress).
+/// Two-finger and open-hand vertical scroll.
+/// - Initiation (precision): FULL tracking, the STABLE pose (hysteresis) and vertically
+///   dominant travel of `commitDistance`.
+/// - Maintenance (continuity): see `maintenance(of:features:stablePose:poseIsFresh:)`.
 public struct ScrollRecognizer: GestureRecognizer {
     public var configuration: ScrollRecognizerConfiguration
 
@@ -104,10 +124,8 @@ public struct ScrollRecognizer: GestureRecognizer {
         var result: [GestureCandidate] = []
         for kind in GestureKind.allCases where kind.family == .scroll {
             let isActive = context.activeKind == kind
-            if isActive {
-                guard Self.continues(kind, features: context.features, rawPose: context.rawPose) else { continue }
-            } else {
-                guard context.activeKind == nil, context.stablePose == kind.pose else { continue }
+            if !isActive {
+                guard context.canInitiate, context.activeKind == nil, context.stablePose == kind.pose else { continue }
             }
             let since = context.candidateSince[kind] ?? context.now
             let from = max(since, context.now - context.history.window)
@@ -121,27 +139,46 @@ public struct ScrollRecognizer: GestureRecognizer {
                 displacement: displacement,
                 axis: axis,
                 evidence: evidence,
-                readyToCommit: axis == .vertical && vertical >= configuration.commitDistance,
-                continuesActive: isActive
+                readyToCommit: !isActive && axis == .vertical && vertical >= configuration.commitDistance,
+                maintenance: isActive
+                    ? Self.maintenance(of: kind, features: context.features, stablePose: context.stablePose, poseIsFresh: context.canInitiate)
+                    : nil
             ))
         }
         return result
     }
 
-    /// Relaxed pose check for a scroll already in progress.
-    static func continues(_ kind: GestureKind, features f: HandFeatures, rawPose: HandPose) -> Bool {
-        if rawPose == .pinch || rawPose == .pointing { return false }
+    /// Evidence for a scroll already in progress.
+    /// - contradicted: the STABLE (debounced, FULL-tracking) pose is a clearly different one,
+    ///   e.g. the middle finger bent (→ pointing) or a pinch. A real end, reacted to at once.
+    /// - supported: the scrolling fingers are not bent and at least partly confirmed extended.
+    ///   One UNKNOWN finger (blur, perspective while the hand moves) does not break it.
+    /// - uncertain: anything else. The arbiter holds, bounded in time.
+    static func maintenance(of kind: GestureKind, features f: HandFeatures, stablePose: HandPose, poseIsFresh: Bool) -> MaintenanceEvidence {
+        if poseIsFresh, contradicts(kind, pose: stablePose) { return .contradicted }
         let index = f.state(of: .index)
         let middle = f.state(of: .middle)
         let ring = f.state(of: .ring)
         let pinky = f.state(of: .pinky)
         switch kind {
         case .twoFingerScroll:
-            return index == .extended && middle == .extended && ring != .extended && pinky != .extended
+            let fingersUp = index != .bent && middle != .bent && (index == .extended || middle == .extended)
+            let othersDown = !(ring == .extended && pinky == .extended)
+            return fingersUp && othersDown ? .supported : .uncertain
         case .openHandScroll:
             let four = [index, middle, ring, pinky]
-            return index == .extended && middle == .extended && !four.contains(.bent)
-                && four.filter { $0 == .extended }.count >= 3
+            let open = !four.contains(.bent) && four.filter { $0 == .extended }.count >= 2
+            return open ? .supported : .uncertain
+        }
+    }
+
+    /// Stable poses that clearly mean "this scroll is over".
+    static func contradicts(_ kind: GestureKind, pose: HandPose) -> Bool {
+        switch (kind, pose) {
+        case (_, .pointing), (_, .pinch): true
+        case (.twoFingerScroll, .openHand), (.twoFingerScroll, .fourFinger): true
+        case (.openHandScroll, .twoFinger): true
+        default: false
         }
     }
 }

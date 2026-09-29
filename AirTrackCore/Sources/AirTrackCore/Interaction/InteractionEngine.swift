@@ -44,6 +44,9 @@ public struct InteractionFrame: Equatable, Sendable {
     public var cursorPolicy: CursorPolicy
     /// Palm speed in hand scales per second, and the axis of the recent motion.
     public var handSpeed: Double
+    /// Vertical palm velocity, hand scales/s (+ = down), and the owner's maintenance evidence.
+    public var verticalVelocity: Double
+    public var maintenance: MaintenanceEvidence?
     public var axis: DominantAxis
     /// PHASE 3A-2: scroll output state, content speed (points/s), last whole step, and whether
     /// the current scroll reaches macOS (live) or is only observed (shadow).
@@ -57,7 +60,8 @@ public struct InteractionFrame: Equatable, Sendable {
         InteractionFrame(
             timestamp: timestamp, trackingMode: .lost, availability: .lost, features: nil,
             pose: .unknown, rawPose: .unknown, candidate: nil, intent: nil, lifecycle: .idle,
-            released: nil, ambiguous: false, cursorPolicy: .follow, handSpeed: 0, axis: .none,
+            released: nil, ambiguous: false, cursorPolicy: .follow, handSpeed: 0,
+            verticalVelocity: 0, maintenance: nil, axis: .none,
             scrollState: .idle, scrollSpeed: 0, scrollDelta: 0, liveOutput: false, actions: []
         )
     }
@@ -119,12 +123,17 @@ public struct InteractionEngine: Sendable {
         let isFresh = now.isFinite && (lastTimestamp.map { now > $0 } ?? true)
         if isFresh { lastTimestamp = now }
 
+        // Features from the observation PointerTracker followed THIS frame: FULL (strict hand)
+        // or PARTIAL / INDEX (degraded view, used only to keep a committed gesture going).
         var features: HandFeatures?
-        if isFresh, pointer.mode == .full, let hand = trackedHand, hand.timestamp >= now - 0.001 {
-            features = HandFeatureExtractor.features(of: hand, configuration: configuration.features)
+        if isFresh, pointer.mode.providesPointer, let hand = trackedHand, hand.timestamp >= now - 0.001 {
+            // A partial view may borrow the hand's recent scale, only while a gesture is committed.
+            let fallback = pointer.mode != .full && arbiter.owner != nil ? history.referenceScale : nil
+            features = HandFeatureExtractor.features(of: hand, configuration: configuration.features, fallbackScale: fallback)
         }
-        var availability = FeatureAvailability(mode: pointer.mode, hasFeatures: features != nil)
-        if !isFresh, availability == .available { availability = .gap }
+        let availability = isFresh
+            ? FeatureAvailability(mode: pointer.mode, hasFeatures: features != nil)
+            : (pointer.mode == .lost ? .lost : .gap)
 
         switch availability {
         case .available:
@@ -132,15 +141,18 @@ public struct InteractionEngine: Sendable {
                 poseClassifier.update(features)
                 history.append(features, pose: poseClassifier.stablePose, mirrored: configuration.mirrored)
             }
+        case .limited:
+            // Motion is still measured (per knuckle); the pose is not re-judged from a partial view.
+            if let features { history.append(features, pose: poseClassifier.stablePose, mirrored: configuration.mirrored) }
         case .gap:
             break // keep pose and history: continuity is PointerTracker's call
-        case .degraded, .lost:
+        case .lost:
             poseClassifier.reset()
             history.clear()
         }
 
         var candidates: [GestureCandidate] = []
-        if availability == .available, let features {
+        if availability == .available || availability == .limited, let features {
             let context = RecognitionContext(
                 now: now,
                 features: features,
@@ -148,12 +160,13 @@ public struct InteractionEngine: Sendable {
                 rawPose: poseClassifier.rawPose,
                 history: history,
                 activeKind: arbiter.owner,
-                candidateSince: arbiter.candidateStarts
+                candidateSince: arbiter.candidateStarts,
+                canInitiate: availability == .available
             )
             for recognizer in recognizers { candidates += recognizer.candidates(in: context) }
         }
 
-        let decision = arbiter.update(candidates: candidates, availability: availability)
+        let decision = arbiter.update(candidates: candidates, availability: availability, now: now)
         var output: [ScrollAction] = []
 
         // Output switched off (pause, permission, cursor control): close anything live now.
@@ -176,8 +189,9 @@ public struct InteractionEngine: Sendable {
             }
         } else if let reason = decision.released {
             if liveSession {
-                // Inertia only from fresh motion: never after LOST (stale) or a cancellation.
-                let momentum = reason == .gestureEnded || reason == .trackingDegraded
+                // Inertia only from fresh motion: a clean end while the scroll was still
+                // supported. Never after a timeout, LOST (stale) or a cancellation.
+                let momentum = reason == .gestureEnded && decision.releasedFresh
                 output += scroll.end(allowMomentum: momentum, at: now)
             }
             liveSession = false
@@ -223,8 +237,9 @@ public struct InteractionEngine: Sendable {
     }
 
     private func makeFrame(now: TimeInterval, pointer: PointerObservation, availability: FeatureAvailability, features: HandFeatures?, decision: IntentArbiter.Decision, emitsActions: Bool, actions: [InteractionAction]) -> InteractionFrame {
-        let velocity = availability == .available ? history.velocity() : .zero
-        let recent = availability == .available ? history.displacement(since: now - 0.2) : .zero
+        let measured = availability == .available || availability == .limited
+        let velocity = measured ? history.velocity() : .zero
+        let recent = measured ? history.displacement(since: now - 0.2) : .zero
         return InteractionFrame(
             timestamp: now,
             trackingMode: pointer.mode,
@@ -240,6 +255,8 @@ public struct InteractionEngine: Sendable {
             ambiguous: decision.ambiguous,
             cursorPolicy: cursorPolicy(for: decision, now: now),
             handSpeed: velocity.magnitude,
+            verticalVelocity: velocity.dy,
+            maintenance: decision.maintenance,
             axis: DominantAxis.of(recent, minimumMagnitude: configuration.scroll.minimumAxisMotion, ratio: configuration.scroll.axisRatio),
             scrollState: scroll.state,
             scrollSpeed: scroll.pointsPerSecond,

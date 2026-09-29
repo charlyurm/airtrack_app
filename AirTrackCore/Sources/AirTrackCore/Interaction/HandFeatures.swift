@@ -54,8 +54,12 @@ public struct HandFeatures: Equatable, Sendable {
     public var timestamp: TimeInterval
     /// Robust hand size in image heights (largest rigid palm measurement, see extractor).
     public var scale: Double
-    /// Mean of the four knuckles (MCP joints), raw image space.
+    /// Mean of the visible knuckles (MCP joints), raw image space. Diagnostics / pose only:
+    /// motion is measured per knuckle (FeatureHistory) so a knuckle dropping out of a frame
+    /// never looks like movement.
     public var palmCenter: Point2D
+    /// Visible knuckles (MCP joints), raw image space: the rigid reference for hand motion.
+    public var knuckles: [HandJoint: Point2D]
     public var imageAspectRatio: Double
     public var chirality: HandChirality
     /// Vision's confidence that this is a hand.
@@ -106,8 +110,13 @@ public struct HandFeatureConfiguration: Equatable, Sendable {
 public enum HandFeatureExtractor {
     /// Palm width (indexMCP → pinkyMCP) is shorter than the palm length it stands in for.
     static let palmWidthToLength = 0.7
+    public static let knuckleJoints: [HandJoint] = [.indexMCP, .middleMCP, .ringMCP, .pinkyMCP]
 
-    public static func features(of hand: HandState, configuration c: HandFeatureConfiguration = HandFeatureConfiguration()) -> HandFeatures? {
+    /// - Parameter fallbackScale: used only when this frame's scale cannot be measured (e.g.
+    ///   wrist and little-finger knuckle below the image while scrolling down). The engine
+    ///   passes the recent median scale of the SAME tracked hand, and only for PARTIAL / INDEX
+    ///   frames that can keep — never start — a gesture.
+    public static func features(of hand: HandState, configuration c: HandFeatureConfiguration = HandFeatureConfiguration(), fallbackScale: Double? = nil) -> HandFeatures? {
         let aspect = (hand.imageAspectRatio.isFinite && hand.imageAspectRatio > 0) ? hand.imageAspectRatio : 1
         func point(_ joint: HandJoint) -> Point2D? { hand.position(of: joint, minimumConfidence: c.minimumJointConfidence) }
         func distance(_ a: Point2D, _ b: Point2D) -> Double {
@@ -116,8 +125,12 @@ public enum HandFeatureExtractor {
             return (dx * dx + dy * dy).squareRoot()
         }
 
-        guard let scale = scale(of: hand, minimumConfidence: c.minimumJointConfidence), scale.isFinite, scale > 0 else { return nil }
-        let knuckles = [HandJoint.indexMCP, .middleMCP, .ringMCP, .pinkyMCP].compactMap(point)
+        let measured = HandFeatureExtractor.scale(of: hand, minimumConfidence: c.minimumJointConfidence)
+        let usableFallback = fallbackScale.flatMap { $0.isFinite && $0 >= HandScale.minimumReferenceLength ? $0 : nil }
+        guard let scale = measured ?? usableFallback, scale.isFinite, scale > 0 else { return nil }
+        var knuckleMap: [HandJoint: Point2D] = [:]
+        for joint in HandFeatureExtractor.knuckleJoints { knuckleMap[joint] = point(joint) }
+        let knuckles = HandFeatureExtractor.knuckleJoints.compactMap { knuckleMap[$0] }
         guard !knuckles.isEmpty else { return nil }
         let palm = knuckles.reduce(Point2D.zero, +) * (1 / Double(knuckles.count))
         guard palm.isFinite else { return nil }
@@ -156,6 +169,7 @@ public enum HandFeatureExtractor {
             timestamp: hand.timestamp,
             scale: scale,
             palmCenter: palm,
+            knuckles: knuckleMap,
             imageAspectRatio: aspect,
             chirality: hand.chirality,
             handConfidence: hand.confidence,

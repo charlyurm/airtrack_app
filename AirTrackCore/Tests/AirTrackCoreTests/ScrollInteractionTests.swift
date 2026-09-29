@@ -171,13 +171,21 @@ final class ScrollInteractionTests: XCTestCase {
         XCTAssertEqual(lost, [ScrollAction(delta: 0, phase: .ended)])
     }
 
-    func testDegradedTrackingEndsTheScrollWithFreshInertia() {
+    func testPartialViewKeepsScrollingWithRealMotion() {
         var s = Session()
         _ = s.run(TestPoses.twoFingers, step: down, count: 6)
-        let partial = scrolls(s.run(TestPoses.twoFingers, step: down, count: 40, mode: .partial))
-        XCTAssertEqual(partial.first, ScrollAction(delta: 0, phase: .ended))
-        XCTAssertEqual(momentum(partial).last?.momentum, .ended, "bounded inertia finishes")
-        XCTAssertTrue(partial.allSatisfy { $0.phase != .began && $0.phase != .changed })
+        // Moving down, the wrist leaves the image: PARTIAL tracking, the scroll goes on.
+        var frames: [InteractionFrame] = []
+        for _ in 0..<6 {
+            let t = Double(s.frame) * InteractionScenario.dt
+            s.frame += 1
+            s.center = s.center + down
+            let hand = TestPoses.hand(extended: TestPoses.twoFingers, at: t, center: s.center, omit: [.wrist])
+            frames.append(InteractionScenario.feed(&s.engine, hand, mode: .partial, at: t, live: true))
+        }
+        let actions = scrolls(frames)
+        XCTAssertEqual(actions.count, 6)
+        XCTAssertTrue(actions.allSatisfy { $0.phase == .changed && $0.delta > 0 })
     }
 
     // MARK: Output safety

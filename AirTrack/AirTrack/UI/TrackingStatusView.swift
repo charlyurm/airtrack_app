@@ -207,6 +207,10 @@ struct TrackingStatusView: View {
             row("Candidato", candidateLabel(i.candidate))
             row("Intent", i.intent.map(kindLabel) ?? "—", color: i.intent == nil ? .secondary : .green)
             row("Lifecycle", i.lifecycle.rawValue.uppercased())
+            row("Features", i.availability.rawValue.uppercased())
+            row("Mantenimiento", i.maintenance?.rawValue.uppercased() ?? "—",
+                color: i.maintenance == .supported ? .green : (i.maintenance == nil ? .secondary : .orange))
+            row("Vel. vertical", String(format: "%+.2f esc/s", i.verticalVelocity))
             row("Cursor policy", i.cursorPolicy == .frozen ? "FROZEN" : "FOLLOW",
                 color: i.cursorPolicy == .frozen ? .orange : .primary)
             row("Scroll", scrollStateLabel(i), color: i.scrollState == .idle ? .secondary : .green)

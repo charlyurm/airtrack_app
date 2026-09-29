@@ -114,15 +114,24 @@ final class InteractionEngineTests: XCTestCase {
         XCTAssertEqual(InteractionScenario.feed(&engine, nil, mode: .lost, at: 8 * dt).lifecycle, .idle)
     }
 
-    func testDegradedTrackingReleasesAndNeverStartsGestures() {
+    func testPartialTrackingKeepsAnActiveScrollButNeverStartsOne() {
         var engine = InteractionEngine()
         _ = InteractionScenario.moving(&engine, extended: TestPoses.twoFingers, step: Point2D(x: 0, y: 0.01), frames: 0..<5)
-        let partial = InteractionScenario.feed(&engine, TestPoses.hand(extended: TestPoses.twoFingers, at: 5 * dt), mode: .partial, at: 5 * dt)
-        XCTAssertEqual(partial.released, .trackingDegraded)
-        for i in 6..<20 {
+        // Wrist below the frame (PARTIAL): the committed scroll continues.
+        for i in 5..<10 {
+            let t = Double(i) * dt
+            let hand = TestPoses.hand(extended: TestPoses.twoFingers, at: t, center: Point2D(x: 0.5, y: 0.4 + 0.01 * Double(i)), omit: [.wrist])
+            let frame = InteractionScenario.feed(&engine, hand, mode: .partial, at: t)
+            XCTAssertEqual(frame.availability, .limited)
+            XCTAssertEqual(frame.intent, .twoFingerScroll, "frame \(i)")
+            XCTAssertEqual(frame.maintenance, .supported)
+        }
+        // A partial view alone never starts a gesture.
+        var fresh = InteractionEngine()
+        for i in 0..<20 {
             let t = Double(i) * dt
             let hand = TestPoses.hand(extended: TestPoses.twoFingers, at: t, center: Point2D(x: 0.5, y: 0.3 + 0.01 * Double(i)))
-            let frame = InteractionScenario.feed(&engine, hand, mode: i.isMultiple(of: 2) ? .partial : .indexContinuity, at: t)
+            let frame = InteractionScenario.feed(&fresh, hand, mode: i.isMultiple(of: 2) ? .partial : .indexContinuity, at: t)
             XCTAssertNil(frame.candidate)
             XCTAssertNil(frame.intent)
             XCTAssertEqual(frame.cursorPolicy, .follow)
@@ -136,7 +145,7 @@ final class InteractionEngineTests: XCTestCase {
             // FULL mode reported but no hand to measure (defensive): nothing happens.
             let frame = InteractionScenario.feed(&engine, nil, mode: .full, at: t)
             XCTAssertNil(frame.candidate)
-            XCTAssertEqual(frame.availability, .degraded)
+            XCTAssertEqual(frame.availability, .gap)
         }
     }
 
