@@ -6,7 +6,7 @@ y Hand Tracking como fases separadas):
 | Fase | Contenido | Estado |
 |---|---|---|
 | **PHASE 0** | Core + Architecture | **COMPLETE** |
-| **PHASE 1** | macOS Foundation + Camera + Vision Hand Tracking | **IN PROGRESS**: código implementado; falta la validación en el Mac |
+| **PHASE 1** | macOS Foundation + Camera + Vision Hand Tracking | **IN PROGRESS**: 1.1 (correcciones tras la prueba en el Mac real) implementada; falta la validación física |
 | PHASE 2 | Cursor Control | NOT STARTED |
 | PHASE 3 | Click / Double Click / Drag | NOT STARTED |
 | PHASE 4 | Scroll | NOT STARTED |
@@ -28,21 +28,28 @@ Claude Code (nube) → código y revisión → GitHub (CI: swift test + xcodebui
 Todo lo que exige hardware real queda marcado como **DEFERRED TO LOCAL MAC VALIDATION**
 hasta que el usuario lo prueba.
 
-## PHASE 1: criterios para pasar a COMPLETE
+## PHASE 1: estado de validación
+
+Primera prueba en el Mac real (PHASE 1): cámara, permiso, preview, tracking LOST y
+recovery y movimiento horizontal **OK**. Fallaron la vertical (invertida), la identidad
+visual de la cadena del índice, el desplazamiento con la distancia, las dos manos y hubo
+falsos positivos a ~20 cm. PHASE 1.1 los aborda (ver `PHASE1_1_RESULT.md`).
 
 | Criterio | Estado |
 |---|---|
-| App macOS existe | ✅ código en `AirTrack/` |
-| AirTrackCore integrado como paquete local | ✅ |
-| Core con 0 failures | ✅ CI |
-| App compila (`BUILD SUCCEEDED`) | ver `TESTING.md` (CI con `xcodebuild`) |
-| CameraStatus con `disconnected` separado de `error` | ✅ código |
-| Permiso de cámara funciona | ⏳ DEFERRED TO LOCAL MAC VALIDATION |
-| Preview funciona | ⏳ DEFERRED |
-| Vision detecta la mano | ⏳ DEFERRED |
-| Landmarks visibles y alineados | ⏳ DEFERRED (requiere confirmación visual) |
-| Tracking loss / recovery | ⏳ DEFERRED |
-| FPS y tiempos medidos en hardware real | ⏳ DEFERRED |
+| App macOS existe y compila | ✅ CI (`xcodebuild`) |
+| AirTrackCore integrado, 0 failures | ✅ CI |
+| Cámara, permiso, preview | ✅ Mac real (PHASE 1) |
+| Tracking loss / recovery | ✅ Mac real (PHASE 1); hay que revalidarlo con el gate nuevo |
+| Movimiento horizontal | ✅ Mac real (PHASE 1) |
+| Movimiento vertical correcto | ⏳ corregido en 1.1, DEFERRED TO LOCAL MAC VALIDATION |
+| Cada cadena sigue su dedo | ⏳ corregido en 1.1, DEFERRED |
+| Sin desplazamiento con la distancia | ⏳ corregido en 1.1, DEFERRED |
+| Falsos positivos controlados | ⏳ filtro nuevo en 1.1, DEFERRED (umbrales sin calibrar) |
+| Dos manos representadas | ⏳ implementado en 1.1, DEFERRED |
+| Rendimiento aceptable | ⏳ DEFERRED (latest-frame-wins nuevo) |
+
+PHASE 2 no empieza hasta que el usuario confirme todos estos puntos en el Mac.
 
 ## Definición de done del MVP
 

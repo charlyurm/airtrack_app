@@ -7,7 +7,7 @@ cd AirTrackCore
 swift test
 ```
 
-Total: **85 tests** en 7 suites.
+Total: **132 tests** en 11 suites (85 hasta PHASE 1 + 47 de PHASE 1.1).
 
 | Suite | Tests | Cubre |
 |---|---|---|
@@ -18,6 +18,10 @@ Total: **85 tests** en 7 suites.
 | `GestureStateMachineTests` | 27 | click, ancla, drag sin salto, double click, tracking loss, pausa, re-armado |
 | `GestureEngineTests` | 8 | pipeline completo, pausa, reanudar con mano cerrada, reset al perder tracking, settings |
 | `LandmarkCoordinateConversionTests` | 7 | origen abajo-izquierda → arriba-izquierda, esquinas, sin espejo, confidence/timestamp/aspect, joints descartados, mano no detectada, compatibilidad con el pinch |
+| `HandJointIdentityTests` (1.1) | 11 | 21 joints distintos, cadenas de los 5 dedos (wrist → punta, sin solapes), identidad de las 21 posiciones tras la conversión, cada cadena sigue su dedo, índice ≠ medio |
+| `PreviewGeometryTests` (1.1) | 11 | vertical (subir la mano = subir en pantalla), horizontal, espejo, letterbox lateral y superior/inferior, esquinas y bordes, entradas degeneradas, estabilidad con la distancia, transformación afín |
+| `HandPresenceFilterTests` (1.1) | 19 | 0/1/2 manos, máximo 2, orden determinista, baja confianza (mano y joints), joint requerido, detección parcial, mano diminuta, fuera de imagen, valores inválidos, falso positivo de un frame, pérdida inmediata, sin datos obsoletos, salida del frame actual, recuperación |
+| `HandOrderingTests` (1.1) | 6 | 0/1/2 manos, izquierda → derecha independiente del orden de entrada, desempate por altura, centroide sin muñeca, descarte de manos vacías |
 
 ### Tests de drag (`GestureStateMachineTests`)
 
@@ -62,6 +66,7 @@ real de tests y builds es la del CI.
 | Commit | Tests macOS | Tests Linux | Build app |
 |---|---|---|---|
 | `b041b7e` | 85/85, 0 failures | 85/85, 0 failures | `** BUILD SUCCEEDED **`. Único warning: "Metadata extraction skipped. No AppIntents.framework dependency found." (benigno) |
+| `4b117fc` (1.1) | 132/132, 0 failures | 132/132, 0 failures | Build OK. Único warning: el mismo de AppIntents (benigno) |
 
 ## Validación manual — DEFERRED TO LOCAL MAC VALIDATION
 
@@ -72,8 +77,10 @@ La checklist detallada (qué hacer y qué esperar) está en `MACOS_SETUP.md`, se
 - [ ] Permiso de cámara (conceder y denegar)
 - [ ] Preview con imagen real
 - [ ] Detección de la mano (`HAND DETECTED`, `Hands: 1`)
-- [ ] Los 9 landmarks aparecen en la lista
-- [ ] Landmarks alineados sobre la mano (con y sin espejo)
+- [ ] Los 21 landmarks aparecen agrupados por dedo
+- [ ] Landmarks alineados sobre la mano (con y sin espejo), cada color en su dedo
+- [ ] Vertical correcta: subir la mano baja `Index tip y`
+- [ ] `Hands: 2` con dos manos
 - [ ] Movimiento y distancia
 - [ ] Tracking loss (`LOST`) y recovery
 - [ ] Desconexión de cámara (`DISCONNECTED`)

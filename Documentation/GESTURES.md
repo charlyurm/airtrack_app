@@ -4,6 +4,12 @@ Todos los valores son **iniciales y no están calibrados**: hay que ajustarlos c
 tracking real en un Mac (REQUIRES MACOS). Estado: la lógica está implementada y
 probada en AirTrackCore; todavía no se ha conectado a una cámara ni a macOS.
 
+## Qué mano se usa
+
+Vision puede detectar hasta 2 manos (PHASE 1.1). Los gestos usan solo la **mano primaria**:
+la primera en el orden determinista de `HandOrdering` (la más a la izquierda en la imagen
+real, que en el preview espejado se ve a la derecha). Los gestos de dos manos son PHASE 7+.
+
 ## Cursor (índice)
 
 1. `indexTip`, en coordenadas de cámara normalizadas.

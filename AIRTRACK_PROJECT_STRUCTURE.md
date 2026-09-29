@@ -128,10 +128,11 @@ AirTrack/
 ├── AirTrackCore/                      ← Swift Package, pure logic, no hardware
 │   ├── Package.swift
 │   ├── Sources/AirTrackCore/
-│   │   ├── Models/        HandJoint, HandState, InteractionAction,
+│   │   ├── Models/        HandJoint (21) + HandSkeleton, HandState, InteractionAction,
 │   │   │                  AirTrackSettings, KeyboardShortcut,
 │   │   │                  LandmarkCoordinateConversion
-│   │   ├── Geometry/      Point2D, Rect2D
+│   │   ├── Geometry/      Point2D, Rect2D, PreviewGeometry
+│   │   ├── Tracking/      HandValidation, HandPresenceFilter, HandOrdering
 │   │   ├── Cursor/        CursorMapper, CursorSmoother, ScreenMapper
 │   │   ├── Gestures/      HandScale, PinchRecognizer,
 │   │   │                  GestureStateMachine, GestureEngine
@@ -143,7 +144,11 @@ AirTrack/
 │       ├── PinchRecognizerTests.swift
 │       ├── GestureStateMachineTests.swift
 │       ├── GestureEngineTests.swift
-│       └── LandmarkCoordinateConversionTests.swift
+│       ├── LandmarkCoordinateConversionTests.swift
+│       ├── HandJointIdentityTests.swift
+│       ├── PreviewGeometryTests.swift
+│       ├── HandPresenceFilterTests.swift
+│       └── HandOrderingTests.swift
 │
 ├── AirTrack/                          ← macOS app (Phase 1): hardware + UI only
 │   ├── AirTrack.xcodeproj

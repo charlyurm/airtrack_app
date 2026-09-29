@@ -8,12 +8,12 @@ cursor, click, doble click, drag y scroll. Todo se procesa en local, sin interne
 | Fase | Estado |
 |---|---|
 | PHASE 0: Core + Architecture | **COMPLETE** |
-| PHASE 1: macOS Foundation + Camera + Vision Hand Tracking | **IN PROGRESS**: código implementado y compilando en CI; falta la validación en el Mac |
+| PHASE 1: macOS Foundation + Camera + Vision Hand Tracking | **IN PROGRESS**: PHASE 1.1 (correcciones tras la prueba en el Mac real) implementada; falta la validación física ([resultado](PHASE1_1_RESULT.md)) |
 | PHASE 2: Cursor Control | NOT STARTED |
 | PHASE 3–7+ | NOT STARTED |
 
-Lo que hace la app hoy: abre la cámara, detecta una mano con Vision y dibuja sus
-landmarks sobre el preview, con el estado del tracking y FPS. **Todavía no mueve el
+Lo que hace la app hoy: abre la cámara, detecta hasta dos manos con Vision y dibuja sus
+21 landmarks sobre el preview (un color por dedo), con el estado del tracking y FPS. **Todavía no mueve el
 cursor.**
 
 ## Estructura
@@ -24,7 +24,8 @@ cursor.**
 | `AirTrack/` | App macOS (SwiftUI): cámara (AVFoundation), Vision, permisos, preview y overlay de debug. |
 | `Documentation/` | Arquitectura, gestos, permisos, testing, roadmap y setup en Mac. |
 | `AIRTRACK_PROJECT_STRUCTURE.md` | Documento maestro de arquitectura, con las enmiendas aprobadas. |
-| `PHASE1_PROMPT.md` | Especificación de PHASE 1. |
+| `PHASE1_PROMPT.md`, `PHASE1_1_PROMPT.md` | Especificaciones de PHASE 1 y 1.1. |
+| `PHASE1_1_RESULT.md` | Diagnóstico, correcciones y validación pendiente de PHASE 1.1. |
 
 ## Pipeline
 
@@ -40,7 +41,7 @@ Requiere Xcode 16+ y macOS 14+.
 
 ```bash
 git checkout claude/gifted-carson-iyjqxg && git pull
-cd AirTrackCore && swift test && cd ..        # 85 tests, 0 failures
+cd AirTrackCore && swift test && cd ..        # 132 tests, 0 failures
 open AirTrack/AirTrack.xcodeproj               # luego ⌘R
 ```
 

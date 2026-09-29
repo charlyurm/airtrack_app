@@ -66,7 +66,7 @@ Lógica pura (solo Foundation). La app lo consume como paquete local
 
 ```bash
 cd AirTrackCore
-swift test          # esperado: Executed 85 tests, with 0 failures
+swift test          # esperado: 0 failures (el total está en TESTING.md)
 ```
 
 ## F. Abrir el proyecto
@@ -128,29 +128,28 @@ file "$APP_DIR/AirTrack.app/Contents/MacOS/AirTrack"      # esperado: arm64
 open "$APP_DIR/AirTrack.app"                               # ejecutar sin Xcode
 ```
 
-## M. Validación manual de PHASE 1 (lo que tienes que mirar)
+## M. Validación manual de PHASE 1.1 (lo que tienes que mirar)
 
-Abre la app. A la izquierda está el preview con el overlay; a la derecha, el panel.
+A la izquierda está el preview con el overlay; a la derecha, el panel. Colores del overlay:
+**pulgar naranja · índice verde · medio azul · anular morado · meñique rosa**, muñeca
+blanca con la etiqueta "1" o "2" (+ L/R si Vision informa chirality).
 
 | # | Prueba | Qué hacer | Resultado esperado |
 |---|---|---|---|
-| A | Cámara | Abrir la app | Imagen real de la cámara; `Camera: RUNNING` en verde |
-| B | Permiso | Primera ejecución (o tras `tccutil reset Camera com.airtrack.AirTrack`) | Aparece el diálogo con el texto de AirTrack. Si lo rechazas: `Camera: PERMISSION REQUIRED`, explicación y botón a Configuración del Sistema, sin crash |
-| C | Mano | Mano abierta frente a la cámara | `Tracking: HAND DETECTED`, `Hands: 1`, joints en verde en la lista |
-| D | Landmarks | Mirar el preview | Punto **verde** en la punta del índice, **naranja** en la del pulgar, blancos en muñeca/MCP/PIP/DIP/otras puntas, línea por la cadena del índice y línea discontinua pulgar–índice. **Deben quedar encima de tu mano** |
-| E | Movimiento | Mover la mano a izquierda, derecha, arriba y abajo | Los puntos siguen a la mano en la misma dirección que ves en el preview |
-| F | Distancia | Acercar y alejar la mano | Los puntos siguen alineados; el tracking no se pierde a distancias normales |
-| G | Espejo | Desactivar "Espejar preview" | La imagen se invierte y **los puntos se invierten con ella** (siguen sobre la mano) |
-| H | Tracking loss | Sacar la mano del encuadre | `Tracking: LOST`, `Hands: 0`, el overlay desaparece, sin errores repetidos |
-| I | Recovery | Volver a meter la mano | `HAND DETECTED` de nuevo, sin reiniciar nada |
-| J | Mano izquierda/derecha | Probar ambas | Ambas se detectan (una a la vez: `maximumHandCount = 1`) |
-| K | Desconexión (si tienes cámara externa o Continuity) | Desconectarla con la app abierta | `Camera: DISCONNECTED` (naranja), no ERROR. Reconectar → Reintentar → RUNNING |
-| L | Rendimiento | Mirar el panel | Camera FPS ~30 (depende de la cámara y de la luz), Vision FPS parecido, Vision processing en ms, Dropped frames creciendo poco |
+| A | Movimiento vertical | Mover la mano despacio de abajo arriba y de arriba abajo | Los puntos se mueven **en la misma dirección** que la mano. En el panel, "Index tip (x, y)": **subir la mano hace BAJAR y** (0 = arriba) |
+| B | Identidad de landmarks | Mano abierta, dedos separados | Punta verde = punta del índice; azul = medio; morada = anular; rosa = meñique; naranja = pulgar. Cada cadena de color recorre **su** dedo |
+| C | Distancia corta | Mano a ~20 cm | Si se detecta, los colores siguen en los dedos correctos. Si la mano no cabe o Vision duda, es aceptable ver `LOST` y "Rechazadas: …"; **no** es aceptable un esqueleto sobre algo que no es tu mano |
+| D | Distancia normal/lejana | Alejar la mano poco a poco | Los puntos siguen pegados a los mismos puntos anatómicos; no hay desplazamiento que crezca con la distancia |
+| E | Dos manos | Ambas manos en cuadro | `Hands: 2`, dos esqueletos ("1" y "2"); la mano 1 es la que está más a la izquierda en la imagen real (más a la derecha en el preview espejado) |
+| F | Tracking LOST | Sacar las manos | `Tracking: LOST`, `Hands: 0` y el overlay desaparece **en el acto** (sin esqueletos congelados) |
+| G | Recovery | Volver a meter la mano | `HAND DETECTED` en unos ~2 frames, con los colores correctos |
+| H | Rendimiento | Mirar el panel ~1 minuto | Anotar Camera FPS, Vision FPS, Vision processing, Capture → HandState, Superseded frames y Camera drops |
+| I | Espejo | Desactivar "Espejar preview" | La imagen se invierte en horizontal y **los puntos se invierten con ella** |
+| J | Desconexión (opcional) | Desconectar la cámara externa o de Continuity | `Camera: DISCONNECTED` (no ERROR); reconectar → Reintentar → RUNNING |
 
-**Qué reportar:** el resultado de cada fila (OK / falla + descripción), una captura de
-pantalla del preview con la mano y los valores de FPS / processing / Capture →
-HandState. Si los puntos están desplazados, invertidos o rotados, describe en qué
-dirección (por ejemplo, "se mueven al revés en horizontal").
+**Qué reportar:** el resultado de cada fila (OK / falla + descripción), una captura con la
+mano abierta y los valores de la fila H. Si algo falla, di la dirección exacta (por ejemplo,
+"la punta verde cae en el dedo medio" o "al subir la mano, y sube").
 
 ## N. Logs
 
