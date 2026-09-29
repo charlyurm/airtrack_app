@@ -3,7 +3,7 @@ import Foundation
 /// Per-frame pipeline: HandState → cursor mapping → smoothing → pinch → state machine.
 ///
 /// Pure and deterministic: the macOS layer feeds it one HandState per camera frame and
-/// posts the returned actions. Scroll (PHASE 5) is not part of it yet.
+/// posts the returned actions. Scroll (PHASE 4) is not part of it yet.
 public struct GestureEngine: Sendable {
     public private(set) var settings: AirTrackSettings
     public private(set) var cursorMapper: CursorMapper

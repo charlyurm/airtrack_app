@@ -8,50 +8,56 @@ cursor, click, doble click, drag y scroll. Todo se procesa en local, sin interne
 | Fase | Estado |
 |---|---|
 | PHASE 0: Core + Architecture | **COMPLETE** |
-| PHASE 1: Camera | **NOT STARTED** |
-| PHASE 2–8 | NOT STARTED |
+| PHASE 1: macOS Foundation + Camera + Vision Hand Tracking | **IN PROGRESS**: código implementado y compilando en CI; falta la validación en el Mac |
+| PHASE 2: Cursor Control | NOT STARTED |
+| PHASE 3–7+ | NOT STARTED |
 
-Todavía **no existe una app ejecutable**: no hay proyecto de Xcode. Lo que existe es
-`AirTrackCore`, la lógica pura, probada en macOS y Linux mediante CI. La app de macOS
-se crea al inicio de PHASE 1 siguiendo `Documentation/MACOS_SETUP.md`.
+Lo que hace la app hoy: abre la cámara, detecta una mano con Vision y dibuja sus
+landmarks sobre el preview, con el estado del tracking y FPS. **Todavía no mueve el
+cursor.**
 
 ## Estructura
 
 | Ruta | Contenido |
 |---|---|
-| `AirTrackCore/` | Swift Package: modelos, geometría, mapeo del cursor, smoothing, pinch, máquina de estados de gestos y calibración. Solo importa Foundation. |
-| `AirTrack/` | App macOS: cámara, Vision, CGEvent, accesibilidad, menu bar, UserDefaults. **No existe todavía.** |
+| `AirTrackCore/` | Swift Package: modelos, geometría, conversión de coordenadas, mapeo del cursor, smoothing, pinch, máquina de estados de gestos y calibración. Solo importa Foundation. |
+| `AirTrack/` | App macOS (SwiftUI): cámara (AVFoundation), Vision, permisos, preview y overlay de debug. |
 | `Documentation/` | Arquitectura, gestos, permisos, testing, roadmap y setup en Mac. |
-| `AIRTRACK_PROJECT_STRUCTURE.md` | Documento maestro de arquitectura (v0.2, con las enmiendas aprobadas). |
+| `AIRTRACK_PROJECT_STRUCTURE.md` | Documento maestro de arquitectura, con las enmiendas aprobadas. |
+| `PHASE1_PROMPT.md` | Especificación de PHASE 1. |
 
-## Frontera AirTrackCore ↔ macOS
+## Pipeline
 
 ```text
-Vision hand observation → HandState → AirTrackCore → [InteractionAction] → MacOSEventController
+AVCaptureSession → CameraFrame → Vision → HandStateMapper → HandState → Debug UI
+                                                                 │
+                                         (PHASE 2+) AirTrackCore → InteractionAction → eventos macOS
 ```
 
-`HandState` e `InteractionAction` son los únicos tipos que cruzan la frontera.
-Detalles en `Documentation/ARCHITECTURE.md`.
+## Empezar en un Mac
 
-## Probar AirTrackCore
-
-Requiere Swift 5.9+ (Xcode 15+ en Mac, o el toolchain de swift.org en Linux):
+Requiere Xcode 16+ y macOS 14+.
 
 ```bash
-cd AirTrackCore
-swift test
+git checkout claude/gifted-carson-iyjqxg && git pull
+cd AirTrackCore && swift test && cd ..        # 85 tests, 0 failures
+open AirTrack/AirTrack.xcodeproj               # luego ⌘R
 ```
 
-El workflow `.github/workflows/airtrackcore-tests.yml` ejecuta los mismos tests en
-macOS y Linux en cada push que toque `AirTrackCore/`.
+Guía completa y checklist de validación: [Documentation/MACOS_SETUP.md](Documentation/MACOS_SETUP.md).
+
+## CI
+
+`.github/workflows/airtrackcore-tests.yml` ejecuta los tests de AirTrackCore en macOS y
+Linux y compila la app con `xcodebuild` en macOS en cada push.
 
 ## Documentación
 
-- [Arquitectura y frontera Core/macOS](Documentation/ARCHITECTURE.md)
+- [Arquitectura, frontera Core/macOS, coordenadas y threading](Documentation/ARCHITECTURE.md)
 - [Gestos](Documentation/GESTURES.md)
 - [Permisos](Documentation/PERMISSIONS.md)
 - [Testing](Documentation/TESTING.md)
 - [Roadmap](Documentation/ROADMAP.md)
-- [Setup en macOS](Documentation/MACOS_SETUP.md): cómo continuar en un Mac real
+- [Setup y validación en macOS](Documentation/MACOS_SETUP.md)
 
 Nada se marca como terminado sin haberlo probado en un Mac real.

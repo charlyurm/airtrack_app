@@ -5,7 +5,7 @@ import Foundation
 public struct AirTrackSettings: Equatable, Sendable, Codable {
     public var cursorSensitivity: Double = 1.0
     public var cursorSmoothing: Double = 0.5
-    /// Reserved for PHASE 5 (scroll). Not used yet.
+    /// Reserved for PHASE 4 (scroll). Not used yet.
     public var scrollSensitivity: Double = 1.0
     /// Pinch start threshold, as a ratio of hand size (see HandScale).
     /// Initial, UNCALIBRATED value — validate with the real camera.

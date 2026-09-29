@@ -3,177 +3,160 @@
 ## Principio
 
 Toda la lógica que no toca hardware vive en **AirTrackCore** y es determinista:
-recibe datos más un timestamp y devuelve comandos. La app de macOS solo traduce
-entre el hardware y AirTrackCore.
+recibe datos más un timestamp y devuelve comandos. La app de macOS (`AirTrack/`) es un
+adaptador entre el hardware y AirTrackCore.
 
 ## Frontera AirTrackCore ↔ macOS
 
-| AIRTRACKCORE (Swift Package, EXISTE) | MACOS APP (`AirTrack/`, NO EXISTE todavía) |
+| AIRTRACKCORE (Swift Package) | MACOS APP (`AirTrack/AirTrack/`) |
 |---|---|
-| Modelos (`HandState`, `InteractionAction`, settings) | Cámara (AVFoundation) |
-| Geometría (`Point2D`, `Rect2D`) | Vision (detección de mano) |
-| Matemática del cursor (`CursorMapper`, `ScreenMapper`) | CGEvent (eventos de ratón) |
-| Smoothing (`CursorSmoother`) | Accesibilidad (permiso + comprobación) |
-| Reconocimiento de pinch (`PinchRecognizer`, `HandScale`) | Atajo global de emergencia |
-| Máquina de estados de gestos (`GestureStateMachine`, `GestureEngine`) | Menu bar y SwiftUI |
-| Matemática de calibración (`ActiveAreaCalibration`) | Persistencia (UserDefaults) |
-| Tests (sin hardware; macOS y Linux) | Permisos, logging, lectura de NSScreen |
+| Modelos (`HandState`, `InteractionAction`, settings) | Cámara (AVFoundation): `Camera/` |
+| Geometría (`Point2D`, `Rect2D`) | Vision (hand pose): `Vision/` |
+| Conversión de coordenadas de landmarks (`LandmarkCoordinateConversion`) | Permiso de cámara: `Permissions/` |
+| Matemática del cursor (`CursorMapper`, `ScreenMapper`) | Preview + overlay de debug: `UI/` |
+| Smoothing (`CursorSmoother`) | Logging (`os.Logger`): `Utilities/` |
+| Pinch (`PinchRecognizer`, `HandScale`) | *Futuro:* CGEvent, Accesibilidad, atajo global, menu bar, UserDefaults |
+| Gestos (`GestureStateMachine`, `GestureEngine`) | |
+| Calibración (`ActiveAreaCalibration`) | |
+| Tests (sin hardware; macOS y Linux) | |
 
-**Regla:** AirTrackCore solo importa `Foundation`. Nunca AVFoundation, Vision,
-AppKit, CoreGraphics ni SwiftUI. El CI en Linux falla si alguien rompe esta regla.
-
-### Flujo de datos
+**Regla:** AirTrackCore solo importa `Foundation`. Nunca AVFoundation, Vision, AppKit,
+CoreGraphics ni SwiftUI. El job de Linux del CI falla si alguien rompe esta regla.
 
 ```text
-                macOS APP                         │        AIRTRACKCORE
-                                                  │
-AVFoundation (AVCaptureSession)                   │
-      │ CMSampleBuffer                            │
-      ▼                                           │
-CameraManager ── CameraFrame (CVPixelBuffer + t) │
-      │                                           │
-      ▼                                           │
-HandTrackingEngine (Vision: hand pose request)    │
-      │ convierte: joints, y = 1 − y, aspect      │
-      ▼                                           │
-   HandState ─────────────────────────────────────┼──▶ GestureEngine.process(hand, isPaused)
-                                                  │      CursorMapper → CursorSmoother
-                                                  │      → PinchRecognizer → GestureStateMachine
-   [InteractionAction] ◀──────────────────────────┼──── (coordenadas de display normalizadas)
-      │                                           │
-      ▼                                           │
-CursorController ── ScreenMapper.map(_:to:) ──────┼──▶ (función pura de Core)
-      │ puntos globales                           │
-      ▼                                           │
-MacOSEventController (CGEvent) → macOS            │
+macOS / Vision  ──HandState──▶  AirTrackCore  ──[InteractionAction]──▶  macOS events (PHASE 2+)
 ```
 
-Los únicos tipos que cruzan la frontera son `HandState` (entrada) e
-`InteractionAction` (salida), además de `AirTrackSettings` para la configuración.
+## Pipeline de PHASE 1 (implementado)
 
-### Threading previsto
-
-- `GestureEngine` es un value type sin locks: lo posee **una sola** cola serie, la de
-  captura de la cámara, y se llama una vez por frame.
-- La UI (main thread) solo recibe copias del estado (fase, estado de la cámara, FPS).
-- Los eventos CGEvent se publican desde la misma cola, para mantener el orden
-  down → drag → up.
-
-## Contratos previstos para PHASE 1+ (NO IMPLEMENTADOS)
-
-Son bocetos de diseño. Las firmas de las APIs de Apple se verificarán al
-implementarlas en un Mac real.
-
-### CameraManager (PHASE 1): `AirTrack/Camera/`
-
-Responsabilidades: descubrir cámaras, pedir permiso, iniciar y detener, entregar
-frames, manejar errores y detectar la pérdida de la cámara. **No contiene** hand
-tracking, gestos ni lógica de cursor.
-
-```swift
-enum CameraStatus: Equatable {
-    case notDetermined
-    case permissionRequired      // denegado o restringido
-    case starting
-    case connected(deviceName: String)
-    case disconnected            // la cámara desapareció o fue interrumpida
-    case error(String)
-}
-
-struct CameraFrame {
-    let pixelBuffer: CVPixelBuffer   // no se copia ni se guarda; vive solo durante el procesamiento
-    let timestamp: TimeInterval      // presentation time de CMSampleBuffer, en segundos (monótono)
-    let width: Int
-    let height: Int
-}
-
-protocol CameraManaging: AnyObject {
-    var status: CameraStatus { get }
-    var onStatusChange: ((CameraStatus) -> Void)? { get set }
-    var onFrame: ((CameraFrame) -> Void)? { get set }   // se llama en la cola serie de captura
-    func availableCameras() -> [String]                  // discovery
-    func requestPermission() async -> Bool
-    func start() throws
-    func stop()
-}
+```text
+AVCaptureSession (CameraManager, sessionQueue)
+      │ CMSampleBuffer en videoQueue
+      ▼
+CameraFrame (CVPixelBuffer + timestamp + tamaño)          ← no entra en AirTrackCore
+      │ HandTrackingPipeline.submit: si Vision está ocupado, el frame se descarta
+      ▼
+VisionHandTrackingEngine (visionQueue)
+      │ VNDetectHumanHandPoseRequest, maximumHandCount = 1, orientación .up
+      ▼
+VNHumanHandPoseObservation
+      │ HandStateMapper: extrae 9 joints (x, y, confidence)
+      ▼
+LandmarkCoordinateConversion (AirTrackCore): y → 1 − y, descarta confidence ≤ 0
+      ▼
+HandState ──▶ AppModel (main) ──▶ CameraPreviewView + HandDebugOverlay + TrackingStatusView
 ```
 
-Notas de implementación (verificar en PHASE 1):
-`AVCaptureDevice.DiscoverySession` para descubrir cámaras;
-`AVCaptureVideoDataOutput` con `alwaysDiscardsLateVideoFrames = true` (se prefiere
-perder un frame antes que acumular latencia); y notificaciones de
-error/interrupción de la sesión y de desconexión del dispositivo para `disconnected`.
+En PHASE 1, `HandState` todavía no pasa por `GestureEngine`: no hay cursor ni eventos.
 
-### HandTrackingEngine (PHASE 2): `AirTrack/Vision/`
+### Componentes
 
-```swift
-protocol HandTracking {
-    func process(_ frame: CameraFrame) -> HandState   // HandState de AirTrackCore
-}
-```
-
-- Vision: hand pose request con máximo 1 mano.
-- Mapeo de joints: wrist, thumbTip, indexMCP/PIP/DIP/Tip, middleTip, ringTip,
-  `littleTip → pinkyTip`.
-- Conversión: `y = 1 − y` (Vision tiene el origen abajo), `confidence` por joint y
-  `imageAspectRatio = width / height`.
-- Sin mano → `HandState.untracked(at:)`. Nunca se inventan landmarks.
-
-### MacOSEventController (PHASE 3/4): `AirTrack/Events/`
-
-- Consume `[InteractionAction]`, convierte cada posición con
-  `ScreenMapper.map(_:to:)` al display objetivo (frame obtenido de NSScreen y
-  convertido con `ScreenMapper.globalFrame(fromAppKitFrame:primaryDisplayHeight:)`).
-- Un CGEvent por acción; `clickCount` → `mouseEventClickState`.
-- Si el permiso de Accesibilidad no está concedido, **no publica nada** y lo informa
-  a la UI.
+| Archivo | Responsabilidad |
+|---|---|
+| `Camera/CameraManager.swift` | Descubrir cámaras (built-in, externa, Continuity), configurar la sesión a 1280×720 en formato 420f, arrancar y parar, entregar frames, detectar desconexión y errores de runtime |
+| `Camera/CameraStatus.swift` | `unknown`, `permissionRequired`, `ready`, `running`, `stopped`, `disconnected`, `error(String)` |
+| `Camera/CameraFrame.swift` | Transporte del frame desde AVFoundation hasta Vision |
+| `Permissions/CameraPermissionManager.swift` | Estado del permiso, solicitud y apertura de Configuración del Sistema |
+| `Vision/VisionHandTrackingEngine.swift` | Ejecutar la petición de Vision sobre un frame |
+| `Vision/HandStateMapper.swift` | Observación de Vision → `HandState` |
+| `Vision/HandTrackingPipeline.swift` | Cola de Vision, backpressure, métricas, log de adquisición y pérdida del tracking |
+| `App/AppModel.swift` | Estado de la UI (`@MainActor @Observable`) |
+| `UI/CameraPreviewView.swift` | Preview (`AVCaptureVideoPreviewLayer`) + overlay en el mismo layer |
+| `UI/HandDebugOverlay.swift` | Dibujo de landmarks |
+| `UI/TrackingStatusView.swift` | Panel de diagnóstico |
 
 ## Sistemas de coordenadas
 
-| Espacio | Origen | Eje Y | Unidades | Dónde |
+| Espacio | Origen | Eje Y | Espejo | Dónde |
 |---|---|---|---|---|
-| Vision | abajo-izquierda | arriba | 0…1 | Solo dentro de HandTrackingEngine |
-| `HandState` | arriba-izquierda | abajo | 0…1, **sin espejo** | Salida de HandTrackingEngine |
-| Cámara espejada | arriba-izquierda | abajo | 0…1 | `CursorMapper.activeArea`, calibración |
-| Display normalizado | arriba-izquierda | abajo | 0…1 | `InteractionAction` |
-| Global macOS (CG) | arriba-izquierda del display principal | abajo | puntos (no píxeles) | CGEvent, `ScreenMapper` |
-| AppKit (NSScreen) | abajo-izquierda del principal | arriba | puntos | Convertir con `ScreenMapper.globalFrame(fromAppKitFrame:)` |
+| Buffer de cámara | arriba-izquierda | abajo | **no** (se fuerza `isVideoMirrored = false` en la salida de datos) | `CameraFrame` |
+| Vision | **abajo**-izquierda | **arriba** | no | Dentro de `HandStateMapper` |
+| `HandState` | arriba-izquierda | abajo | **no** | Frontera con AirTrackCore |
+| Capture device point (AVFoundation) | arriba-izquierda | abajo | no | Idéntico a `HandState` en una cámara de Mac horizontal |
+| Preview layer | el que use el layer | — | **sí**, si "Espejar preview" está activo (por defecto) | Solo visual |
+| Cámara espejada (Core) | arriba-izquierda | abajo | sí | `CursorMapper.activeArea` (PHASE 2) |
+| Display normalizado | arriba-izquierda | abajo | — | `InteractionAction` (PHASE 2+) |
+| Global macOS (CG) | arriba-izquierda del display principal | abajo | — | CGEvent (PHASE 2+) |
 
-- **Retina:** CGEvent trabaja en puntos, así que no se aplica ningún `backingScaleFactor`.
-- **Aspect ratio:** en una imagen 16:9, 0.1 en x no mide lo mismo que 0.1 en y. Las
-  distancias de la mano se corrigen con `HandState.imageAspectRatio`.
-- **Multi-monitor:** el MVP mapea a un solo display objetivo.
+- **Normalización:** todas las coordenadas de landmarks van de 0 a 1 respecto a la imagen
+  completa. Las distancias se corrigen con `HandState.imageAspectRatio` (ancho/alto del
+  buffer, 16:9 a 1280×720).
+- **Orientación:** las cámaras de Mac entregan buffers horizontales y derechos, así que
+  Vision usa `.up`. Una cámara rotada (p. ej., un iPhone en vertical con Continuity
+  Camera) no está contemplada: pendiente de validar en el Mac.
+- **Espejo:** solo en el preview. `HandState` es siempre la imagen real. El espejo para
+  el cursor lo aplica `CursorMapper` en PHASE 2.
+- **Alineación del overlay:** no se invierte X a mano. Cada punto de `HandState` se
+  convierte con `AVCaptureVideoPreviewLayer.layerPointConverted(fromCaptureDevicePoint:)`,
+  que aplica el `videoGravity` (bandas negras) y el espejo del propio layer, y el overlay
+  es un sublayer del mismo layer. **DEFERRED TO LOCAL MAC VALIDATION**: la alineación
+  real solo se confirma viendo la mano en pantalla.
+
+## Threading
+
+```text
+MAIN (MainActor)   SwiftUI, AppModel, dibujo del overlay
+sessionQueue       configuración de AVCaptureSession, startRunning/stopRunning (bloqueantes)
+videoQueue         callbacks de AVCaptureVideoDataOutput → HandTrackingPipeline.submit
+visionQueue        VNImageRequestHandler.perform → HandState
+→ main             DispatchQueue.main.async + MainActor.assumeIsolated (conserva el orden)
+```
+
+- Vision nunca corre en el main thread.
+- **Backpressure:** hay como máximo un frame en vuelo. Si Vision sigue ocupado, el frame
+  nuevo se descarta (se cuenta en `Dropped frames`), así la latencia no se acumula.
+  Además, `alwaysDiscardsLateVideoFrames = true`.
+- Los frames nunca se guardan: el `CVPixelBuffer` se libera al terminar Vision.
+- Swift 6 (`SWIFT_VERSION = 6.0`, concurrencia estricta). `CameraManager` y
+  `HandTrackingPipeline` son `@unchecked Sendable` con su estado confinado a colas serie
+  o protegido por `NSLock`, y lo documentan en el código.
+- El overlay se actualiza por cada resultado de Vision (~30 Hz). Las métricas llegan a la
+  UI como máximo 4 veces por segundo.
+
+## Métricas (nombres honestos)
+
+| Métrica | Qué mide | Qué NO mide |
+|---|---|---|
+| Camera FPS | Frames entregados por AVFoundation (ventana de 1 s) | — |
+| Vision FPS | Frames procesados por Vision | — |
+| Vision processing | Duración de `perform` (suavizada) | La espera en cola |
+| Capture → HandState | Timestamp de captura → `HandState` listo (cola + Vision) | Tiempo de pantalla: **no es latencia end-to-end** |
+| Dropped frames | Descartados por backpressure + descartados por AVFoundation | — |
+
+`Capture → HandState` asume que el timestamp de presentación está en el reloj host (lo
+habitual en AVCaptureSession). Si el valor no es plausible (fuera de 0–2 s) se muestra
+"—". DEFERRED TO LOCAL MAC VALIDATION.
 
 ## Módulos de AirTrackCore
 
 | Carpeta | Tipos | Responsabilidad |
 |---|---|---|
-| `Models/` | `HandJoint`, `HandState`, `InteractionAction`, `AirTrackSettings`, `KeyboardShortcut` | Modelos independientes del proveedor de tracking |
+| `Models/` | `HandJoint`, `HandState`, `InteractionAction`, `AirTrackSettings`, `KeyboardShortcut`, `LandmarkCoordinateConversion` | Modelos independientes del proveedor de tracking |
 | `Geometry/` | `Point2D`, `Rect2D` | Geometría propia (sin CGPoint, para compilar en Linux) |
 | `Cursor/` | `CursorMapper`, `CursorSmoother`, `ScreenMapper` | Cámara → pantalla |
 | `Gestures/` | `HandScale`, `PinchRecognizer`, `GestureStateMachine`, `GestureEngine` | Gestos |
-| `Calibration/` | `ActiveAreaCalibration` | Matemática de calibración (la UI es PHASE 6) |
+| `Calibration/` | `ActiveAreaCalibration` | Matemática de calibración (la UI es PHASE 5) |
 
-## Reglas de seguridad (garantizadas por tests)
+## Reglas de seguridad
 
-- Si se pierde el tracking, el cursor no se mueve.
-- Una pérdida de tracking mayor a 150 ms durante un drag envía `mouseUp`, para que
-  el botón no quede pegado.
-- Al pausar, se envía un `mouseUp` inmediato si había drag; después, silencio total.
-- Tras una pérdida o una pausa, la mano debe abrirse antes de aceptar otro pinch.
-- Entrar en un drag nunca mueve el cursor (offset cursor–dedo), y salir tampoco
-  (el offset se desvanece).
-- Si la entrada es NaN o infinita, no se genera ningún evento.
+- Si se pierde el tracking, `HandState` queda vacío (`isTracked = false`) y el overlay
+  desaparece; nunca se inventan landmarks.
+- Sin permiso de cámara la app arranca igual y muestra cómo concederlo.
+- Una cámara desconectada muestra `DISCONNECTED`, no `ERROR`. Un error de runtime justo
+  después de una desconexión se trata como desconexión.
+- Cerrar la ventana cierra la app, así que la cámara nunca queda encendida en segundo plano.
+- (Core, ya probado) Tracking loss o pausa durante un drag → `mouseUp`; drag sin saltos.
 
 ## Decisiones
 
 | Decisión | Motivo | Estado |
 |---|---|---|
-| AirTrackCore sin frameworks de Apple | Tests rápidos sin cámara, también en Linux o CI | Definitiva |
-| `mouseDown` diferido hasta resolver el gesto | Un pinch cancelado (pérdida o pausa) nunca llega al sistema | Definitiva |
-| Drag con offset `cursor = dedo + (ancla − dedo al iniciar)` | Sin salto al entrar en drag | Definitiva |
-| Offset residual que decae en 200 ms tras soltar | Sin salto al salir del drag | Valor provisional |
-| Pinch confirmado en 2 frames (~33 ms a 30 fps) | Evitar falsos positivos antes que reducir latencia | **Provisional**, revisar con mediciones reales |
-| EMA por frame | Simple y suficiente para empezar | **Provisional**: pasar a smoothing por tiempo |
-| Sin App Sandbox | Publicar CGEvent desde sandbox no es viable | MVP |
-| Timestamps inyectados | Tests deterministas sin depender del reloj | Definitiva |
+| AirTrackCore sin frameworks de Apple | Tests sin cámara, también en Linux o CI | Definitiva |
+| `LandmarkCoordinateConversion` en Core | La conversión de ejes es lógica pura; en Core se prueba con `swift test` en macOS y Linux sin crear un target de tests en Xcode que enlazaría AirTrackCore dos veces | Definitiva (adición, no cambia nada existente) |
+| Vision clásico (`VNDetectHumanHandPoseRequest`) | Disponible desde macOS 11, compatible con el deployment target 14 y conocido. La API Swift nueva de Vision (macOS 15+) queda como opción futura | Revisable |
+| Deployment target macOS 14 | `@Observable`, `@Bindable` y los tipos de cámara `.external`/`.continuityCamera` | Revisable |
+| Overlay alineado con la conversión del preview layer | Evita reimplementar letterboxing y espejo a mano | Pendiente de confirmación visual |
+| Descartar frames en lugar de encolarlos | Latencia acotada | Definitiva |
+| Proyecto con grupos sincronizados (objectVersion 77) | `.pbxproj` sin lista de archivos: más pequeño y robusto | Requiere Xcode 16+ |
+| Firma "Sign to Run Locally" (ad-hoc) + entitlement de cámara | Ejecución local sin cuenta de desarrollador; sin sandbox. Con firma ad-hoc Xcode desactiva el Hardened Runtime; el entitlement cubre el caso de firmar con un Team | MVP |
+| Latencia del pinch en 2 frames, EMA por frame | Ver `GESTURES.md` | Provisional |

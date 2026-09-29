@@ -7,7 +7,7 @@ cd AirTrackCore
 swift test
 ```
 
-Total: **78 tests** en 6 suites.
+Total: **85 tests** en 7 suites.
 
 | Suite | Tests | Cubre |
 |---|---|---|
@@ -17,6 +17,7 @@ Total: **78 tests** en 6 suites.
 | `PinchRecognizerTests` | 15 | pinch sí/no, invariancia a escala de mano, histéresis, spikes, ruido con semilla, aspect ratio, oclusión, confianza |
 | `GestureStateMachineTests` | 27 | click, ancla, drag sin salto, double click, tracking loss, pausa, re-armado |
 | `GestureEngineTests` | 8 | pipeline completo, pausa, reanudar con mano cerrada, reset al perder tracking, settings |
+| `LandmarkCoordinateConversionTests` | 7 | origen abajo-izquierda → arriba-izquierda, esquinas, sin espejo, confidence/timestamp/aspect, joints descartados, mano no detectada, compatibilidad con el pinch |
 
 ### Tests de drag (`GestureStateMachineTests`)
 
@@ -32,37 +33,54 @@ Total: **78 tests** en 6 suites.
 | Un pinch corto no entra en drag | `testShortPinchDoesNotEnterDrag` |
 | (extra) El drag no sale de la pantalla | `testDragPositionStaysOnScreen` |
 
-Determinismo:
-- Los timestamps se inyectan; nada depende del reloj.
-- El "ruido" usa un PRNG con semilla fija.
-- Las posiciones de los tests de drag son valores diádicos (0.5, 0.625, 1/128…),
-  exactos en binario, así que las comparaciones son exactas.
+Determinismo: timestamps inyectados, PRNG con semilla fija y posiciones diádicas
+(exactas en binario) en los tests de drag.
+
+## App macOS
+
+- **No tiene target de tests.** La lógica comprobable sin hardware, como la conversión
+  de coordenadas de Vision, vive en AirTrackCore y se prueba allí. Lo que queda en la
+  app es integración con AVFoundation, Vision y AppKit, que solo se verifica ejecutándola.
+- **Compilación:** verificada en CI con `xcodebuild` (ver abajo).
 
 ## CI
 
-`.github/workflows/airtrackcore-tests.yml` ejecuta `swift test` en cada push que
-toque `AirTrackCore/`:
-- `macos-15` (arm64, toolchain real de Apple)
-- `ubuntu-24.04` (x86_64; demuestra que AirTrackCore no depende de frameworks de Apple)
+`.github/workflows/airtrackcore-tests.yml` ("AirTrack CI") en cada push que toque
+`AirTrackCore/` o `AirTrack/`:
 
-El contenedor de desarrollo en la nube no puede instalar Swift (la política de red
-bloquea `download.swift.org`), así que la ejecución real de los tests es la de CI.
+| Job | Runner | Qué hace |
+|---|---|---|
+| `swift test (macOS)` | `macos-15` (arm64) | Tests de AirTrackCore |
+| `swift test (Linux…)` | `ubuntu-24.04` (x86_64) | Tests de AirTrackCore; demuestra que no depende de Apple |
+| `xcodebuild AirTrack.app` | `macos-15` | Compila la app completa (Debug, firma ad-hoc) y lista los warnings. **No la ejecuta**: el runner no tiene cámara |
 
-## Pruebas manuales — REQUIRES MACOS
+El contenedor de desarrollo en la nube no tiene Swift ni Xcode, así que la ejecución
+real de tests y builds es la del CI.
 
-Ninguna está hecha todavía:
+### Último resultado verificado
 
-- [ ] `swift test` en el Mac del desarrollador
-- [ ] `** BUILD SUCCEEDED **` de la app (`MACOS_SETUP.md`, L)
-- [ ] Captura de cámara y estados Connected / Permission Required / Error
-- [ ] Landmarks visibles y estables en el modo debug
-- [ ] Pérdida de tracking detectada visualmente
-- [ ] Cursor con baja latencia y bajo jitter
-- [ ] Click sin desplazamiento del objetivo
-- [ ] Drag sin salto al empezar ni al soltar
-- [ ] Double click en Finder
-- [ ] Drag de una ventana y de un archivo
-- [ ] Pausa y reanudación con el atajo
-- [ ] Flujo de permisos de cámara y de accesibilidad
-- [ ] Calibración de los umbrales de pinch con manos y distancias reales
-- [ ] Medición de la latencia del pinch (confirmación en 2 frames)
+| Commit | Tests macOS | Tests Linux | Build app |
+|---|---|---|---|
+| `b041b7e` | 85/85, 0 failures | 85/85, 0 failures | `** BUILD SUCCEEDED **`. Único warning: "Metadata extraction skipped. No AppIntents.framework dependency found." (benigno) |
+
+## Validación manual — DEFERRED TO LOCAL MAC VALIDATION
+
+La checklist detallada (qué hacer y qué esperar) está en `MACOS_SETUP.md`, sección M.
+
+- [ ] `swift test` en el Mac del usuario
+- [ ] `** BUILD SUCCEEDED **` en el Xcode del usuario
+- [ ] Permiso de cámara (conceder y denegar)
+- [ ] Preview con imagen real
+- [ ] Detección de la mano (`HAND DETECTED`, `Hands: 1`)
+- [ ] Los 9 landmarks aparecen en la lista
+- [ ] Landmarks alineados sobre la mano (con y sin espejo)
+- [ ] Movimiento y distancia
+- [ ] Tracking loss (`LOST`) y recovery
+- [ ] Desconexión de cámara (`DISCONNECTED`)
+- [ ] Camera FPS, Vision FPS, Vision processing y Capture → HandState con valores plausibles
+- [ ] Sin errores repetitivos en el log
+
+Pendientes de fases posteriores:
+- [ ] Cursor con baja latencia y bajo jitter (PHASE 2)
+- [ ] Click, double click y drag reales (PHASE 3)
+- [ ] Calibración de los umbrales de pinch con manos reales

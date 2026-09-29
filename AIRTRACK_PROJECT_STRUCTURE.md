@@ -129,7 +129,8 @@ AirTrack/
 │   ├── Package.swift
 │   ├── Sources/AirTrackCore/
 │   │   ├── Models/        HandJoint, HandState, InteractionAction,
-│   │   │                  AirTrackSettings, KeyboardShortcut
+│   │   │                  AirTrackSettings, KeyboardShortcut,
+│   │   │                  LandmarkCoordinateConversion
 │   │   ├── Geometry/      Point2D, Rect2D
 │   │   ├── Cursor/        CursorMapper, CursorSmoother, ScreenMapper
 │   │   ├── Gestures/      HandScale, PinchRecognizer,
@@ -141,56 +142,23 @@ AirTrack/
 │       ├── CursorSmootherTests.swift
 │       ├── PinchRecognizerTests.swift
 │       ├── GestureStateMachineTests.swift
-│       └── GestureEngineTests.swift
+│       ├── GestureEngineTests.swift
+│       └── LandmarkCoordinateConversionTests.swift
 │
-├── AirTrack.xcodeproj                 ← created on the Mac at PHASE 1 start (MACOS_SETUP.md);
-│                                        Xcode may nest it as AirTrack/AirTrack.xcodeproj
+├── AirTrack/                          ← macOS app (Phase 1): hardware + UI only
+│   ├── AirTrack.xcodeproj
+│   ├── AirTrack.entitlements
+│   └── AirTrack/                      ← folder-synchronized source root
+│       ├── App/          AirTrackApp (+ AppDelegate), AppModel
+│       ├── Camera/       CameraManager, CameraFrame, CameraStatus
+│       ├── Vision/       VisionHandTrackingEngine, HandStateMapper, HandTrackingPipeline
+│       ├── Permissions/  CameraPermissionManager   (the ONLY camera-permission type)
+│       ├── UI/           ContentView, CameraPreviewView, HandDebugOverlay, TrackingStatusView
+│       └── Utilities/    Logging, FrameRateCounter
 │
-├── AirTrack/                          ← macOS layer: hardware + UI only
-│   │
-│   ├── App/
-│   │   ├── AirTrackApp.swift
-│   │   └── AppDelegate.swift
-│   │
-│   ├── Camera/
-│   │   ├── CameraManager.swift
-│   │   └── CameraFrame.swift
-│   │
-│   ├── Vision/
-│   │   └── HandTrackingEngine.swift   ← Vision → AirTrackCore.HandState adapter
-│   │
-│   ├── Cursor/
-│   │   └── CursorController.swift     ← AirTrackCore actions → ScreenMapper → events
-│   │
-│   ├── Events/
-│   │   ├── MacOSEventController.swift
-│   │   ├── MouseEventGenerator.swift
-│   │   └── ScrollEventGenerator.swift
-│   │
-│   ├── Permissions/
-│   │   ├── AccessibilityPermission.swift
-│   │   └── CameraPermission.swift
-│   │
-│   ├── UI/
-│   │   ├── MenuBarView.swift
-│   │   ├── SettingsView.swift
-│   │   ├── CalibrationView.swift
-│   │   ├── GestureStatusView.swift
-│   │   └── Components/
-│   │       ├── ToggleRow.swift
-│   │       ├── SensitivitySlider.swift
-│   │       └── StatusIndicator.swift
-│   │
-│   ├── Services/
-│   │   ├── AirTrackEngine.swift
-│   │   ├── CalibrationService.swift
-│   │   └── SettingsService.swift
-│   │
-│   └── Utilities/
-│       └── Logger.swift
-│
-├── Resources/
-│   └── Assets.xcassets
+│   Planned (not created yet): Cursor/CursorController, Events/MacOSEventController
+│   (Phase 2–4), Permissions/AccessibilityPermission (Phase 2), menu bar, settings and
+│   calibration UI (Phase 5).
 │
 ├── Documentation/
 │   ├── ARCHITECTURE.md
@@ -802,57 +770,46 @@ Camera frames should exist only as long as necessary for processing.
 
 # 23. DEVELOPMENT PHASES
 
-> **Amendment:** this numbering is the official one. The master prompt's
-> "FASE 1 — BOOTSTRAP / FASE 2 — CAMERA…" are superseded by it.
+> **Amendment (Phase 1):** Camera and Hand tracking were merged into Phase 1, because
+> the camera cannot be validated without landmarks. This numbering is the official one
+> and supersedes both the master prompt's and v0.2's. Live status: `Documentation/ROADMAP.md`.
 
-## Phase 0 — Project bootstrap + architecture
+## Phase 0 — Core + Architecture
 
 - Create `AirTrackCore` (pure logic) with unit tests passing.
-- Create native macOS project.
-- Configure Apple Silicon.
-- Establish folder structure.
-- Configure permissions.
-- Create README and architecture documentation.
-- Verify clean build.
+- Establish folder structure, permissions plan and documentation.
 
-## Phase 1 — Camera
+## Phase 1 — macOS Foundation + Camera + Vision Hand Tracking
 
-- Camera permission.
-- Camera capture.
-- Frame pipeline.
-- Preview/debug view.
+- Native macOS app consuming AirTrackCore.
+- Camera permission, capture, frame pipeline.
+- Vision hand pose → HandState.
+- Preview + landmark debug overlay.
+- Tracking loss/recovery, FPS and latency metrics.
 
-## Phase 2 — Hand tracking
-
-- Detect hand.
-- Extract landmarks.
-- Display landmarks.
-- Track continuously.
-- Handle tracking loss.
-
-## Phase 3 — Cursor
+## Phase 2 — Cursor Control
 
 - Index tracking.
 - Coordinate mapping.
 - Smoothing.
-- macOS cursor movement.
+- macOS cursor movement (Accessibility).
 - Emergency pause.
 
-## Phase 4 — Click
+## Phase 3 — Click / Double Click / Drag
 
 - Pinch detection.
 - Click.
 - Double click.
 - Drag.
 
-## Phase 5 — Scroll
+## Phase 4 — Scroll
 
 - Open-hand detection.
 - Vertical movement.
 - Scroll events.
 - Sensitivity.
 
-## Phase 6 — UX
+## Phase 5 — Menu Bar / Settings / Calibration
 
 - Menu bar app.
 - Settings.
@@ -860,14 +817,14 @@ Camera frames should exist only as long as necessary for processing.
 - Permission onboarding.
 - Status indicators.
 
-## Phase 7 — Optimization
+## Phase 6 — Optimization
 
 - Latency.
 - CPU usage.
 - Tracking stability.
 - False gesture reduction.
 
-## Phase 8 — Advanced trackpad gestures
+## Phase 7+ — Advanced trackpad gestures
 
 Only after MVP is stable:
 

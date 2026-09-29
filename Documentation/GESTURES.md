@@ -98,4 +98,4 @@ tenga conflictos en tu Mac.
 
 ## Aún no implementado
 
-- Scroll con la mano abierta (PHASE 5).
+- Scroll con la mano abierta (PHASE 4).
