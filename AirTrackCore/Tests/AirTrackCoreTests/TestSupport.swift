@@ -89,13 +89,13 @@ struct SeededGenerator: RandomNumberGenerator {
     }
 }
 
-func XCTAssertPointEqual(_ a: Point2D?, _ b: Point2D, accuracy: Double = 1e-9, file: StaticString = #filePath, line: UInt = #line) {
+func XCTAssertPointEqual(_ a: Point2D?, _ b: Point2D, accuracy: Double = 1e-9, _ message: String = "", file: StaticString = #filePath, line: UInt = #line) {
     guard let a else {
-        XCTFail("point is nil, expected \(b)", file: file, line: line)
+        XCTFail("point is nil, expected \(b) \(message)", file: file, line: line)
         return
     }
-    XCTAssertEqual(a.x, b.x, accuracy: accuracy, "x", file: file, line: line)
-    XCTAssertEqual(a.y, b.y, accuracy: accuracy, "y", file: file, line: line)
+    XCTAssertEqual(a.x, b.x, accuracy: accuracy, "x \(message)", file: file, line: line)
+    XCTAssertEqual(a.y, b.y, accuracy: accuracy, "y \(message)", file: file, line: line)
 }
 
 func XCTAssertRectEqual(_ a: Rect2D?, _ b: Rect2D, accuracy: Double = 1e-9, file: StaticString = #filePath, line: UInt = #line) {

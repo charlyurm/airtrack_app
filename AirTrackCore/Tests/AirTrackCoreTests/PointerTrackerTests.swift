@@ -187,7 +187,8 @@ final class PointerTrackerTests: XCTestCase {
         var mixed = partial(Point2D(x: 0.5, y: 0.5), t(2))
         // Index chain in place, but the other fingers are somewhere else entirely.
         for joint in [HandJoint.middlePIP, .middleDIP, .middleTip, .ringPIP, .ringDIP, .ringTip, .pinkyDIP, .pinkyTip] {
-            mixed.landmarks[joint]?.position = mixed.landmarks[joint]!.position + Point2D(x: 0.3, y: 0)
+            let moved = mixed.landmarks[joint]!.position + Point2D(x: 0.3, y: 0)
+            mixed.landmarks[joint]?.position = moved
         }
         XCTAssertEqual(tracker.update(candidates: [mixed], timestamp: t(2)).pointer.mode, .holding)
     }

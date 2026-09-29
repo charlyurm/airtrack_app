@@ -200,7 +200,7 @@ final class AdaptiveCursorSmootherTests: XCTestCase {
         var s = AdaptiveCursorSmoother(restSmoothing: 0.5, speedResponse: 8)
         _ = s.smooth(Point2D(x: 0, y: 0), at: 1)
         XCTAssertPointEqual(s.smooth(Point2D(x: 1, y: 1), at: 1), Point2D(x: 0.5, y: 0.5))
-        XCTAssertPointEqual(s.smooth(Point2D(x: 1, y: 1), at: 0.5), Point2D(x: 0.75, y: 0.75), "out-of-order time")
+        XCTAssertPointEqual(s.smooth(Point2D(x: 1, y: 1), at: 0.5), Point2D(x: 0.75, y: 0.75), accuracy: 1e-9, "out-of-order time")
     }
 
     func testLongGapIsBoundedToOneStep() {
