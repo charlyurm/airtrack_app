@@ -225,7 +225,7 @@ Debug nuevo en el panel (sección Cursor), para la validación:
 
 ```bash
 git pull
-cd AirTrackCore && swift test && cd ..     # Executed 229 tests, with 0 failures
+cd AirTrackCore && swift test && cd ..     # Executed 240 tests, with 0 failures (229 + 11 del hotfix de Accesibilidad)
 open AirTrack/AirTrack.xcodeproj           # ⌘R
 ```
 
@@ -234,7 +234,7 @@ otra cosa. Anota PASS/FAIL por fila.
 
 | # | Preparación | Acción | Resultado esperado (PASS) |
 |---|---|---|---|
-| **A** Accesibilidad | Permiso concedido | Activar Cursor Control | `Permission: READY`, `Cursor: ACTIVE` con la mano en cuadro |
+| **A** Accesibilidad | Permiso concedido | Activar Cursor Control | `Permission: READY`, `Cursor: ACTIVE` con la mano en cuadro. Si la lista dice permitido y AirTrack no: `Documentation/PERMISSIONS.md` → ACCESSIBILITY PERMISSION TROUBLESHOOTING |
 | **B** Centro | Índice en el centro del rectángulo discontinuo | Mantener | Cursor en el centro de la pantalla |
 | **C** Horizontal | — | Izquierda → derecha (tuyas) | El cursor va igual, sin inversión |
 | **D** Vertical | — | Arriba → abajo | El cursor va igual, sin inversión |

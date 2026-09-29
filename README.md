@@ -48,7 +48,7 @@ Requiere Xcode 16+ y macOS 14+.
 
 ```bash
 git checkout claude/gifted-carson-iyjqxg && git pull
-cd AirTrackCore && swift test && cd ..        # 229 tests, 0 failures
+cd AirTrackCore && swift test && cd ..        # 240 tests, 0 failures
 open AirTrack/AirTrack.xcodeproj               # luego ⌘R
 ```
 

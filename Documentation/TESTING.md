@@ -7,7 +7,7 @@ cd AirTrackCore
 swift test
 ```
 
-Total: **229 tests** en 16 suites (85 hasta PHASE 1 + 47 de PHASE 1.1 + 44 de PHASE 2 + 53 de PHASE 2.1).
+Total: **240 tests** en 17 suites (85 hasta PHASE 1 + 47 de PHASE 1.1 + 44 de PHASE 2 + 53 de PHASE 2.1 + 11 del hotfix de Accesibilidad).
 
 | Suite | Tests | Cubre |
 |---|---|---|
@@ -26,6 +26,7 @@ Total: **229 tests** en 16 suites (85 hasta PHASE 1 + 47 de PHASE 1.1 + 44 de PH
 | `AdaptiveCursorSmootherTests` (2.1) | 18 | quieto exacto, micro jitter, lento/normal/rápido, lag acotado, aceleración, deceleración y parada sin overshoot, inversión de dirección, independencia de FPS, determinismo, rango, reset, timestamps duplicados, hueco largo, saneo, equivalencia con la EMA de PHASE 2 |
 | `PointerTrackerTests` (2.1) | 24 | adquisición estricta, parcial e índice tras la adquisición, mano saliendo por abajo, índice aislado/parcial desconocido nunca activa, salto, baja confianza, obsoleto, chirality, geometría, coherencia, HOLD, timeouts, reacquisición completa, desactivado = PHASE 2, determinismo, saneo |
 | `CursorPointerIntegrationTests` (2.1) | 11 | modos que mueven el cursor, HOLD sin eventos ni glide, LOST borra la sesión, glide desde el cursor real, borde inferior alcanzable con la palma fuera, un frame perdido no reinicia |
+| `AccessibilityPermissionTrackerTests` (hotfix 2.1) | 11 | concedido al iniciar (nunca WAITING FOR PERMISSION), denegado al iniciar, false → true al volver a la app, true → false (periódico), activación/acciones siempre consultan, periódico limitado a 1/s, sin estado obsoleto, prompt como mucho una vez, sin solicitud si ya hay permiso, reloj hacia atrás. La API real de TCC no se simula: solo se prueban las transiciones |
 | `HandOrderingTests` (1.1) | 6 | 0/1/2 manos, izquierda → derecha independiente del orden de entrada, desempate por altura, centroide sin muñeca, descarte de manos vacías |
 
 ### Tests de drag (`GestureStateMachineTests`)

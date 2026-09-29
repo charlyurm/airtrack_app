@@ -106,7 +106,7 @@ En PHASE 1 `HandState` todavía no pasa por `GestureEngine`: no hay cursor ni ev
 | `Vision/HandStateMapper.swift` | Tabla explícita Vision → `HandJoint` y conversión a `HandState` |
 | `Vision/HandTrackingPipeline.swift` | Buzón latest-frame-wins, `PointerTracker` (filtro de presencia + continuidad, 2.1), cursor (PHASE 2), métricas, logs |
 | `Events/MacOSEventController.swift` | Pantalla principal, posición actual del cursor, `CGEvent .mouseMoved` (**solo mover**) |
-| `Permissions/AccessibilityPermissionManager.swift` | Permiso de Accesibilidad (comprobar, pedir una vez, abrir Configuración) |
+| `Permissions/AccessibilityPermissionManager.swift` | Permiso de Accesibilidad: `AXIsProcessTrusted() \|\| CGPreflightPostEventAccess()`, prompt con `AXIsProcessTrustedWithOptions`, abrir Configuración; `AccessibilityDiagnostics` (bundle, ejecutable, firma) |
 | `App/AppModel.swift` | Estado de la UI (`@MainActor @Observable`) |
 | `UI/CameraPreviewView.swift` | Solo video (`AVCaptureVideoPreviewLayer`, `.resizeAspect`, espejo) |
 | `UI/HandDebugOverlay.swift` | Landmarks en SwiftUI `Canvas`, un color por dedo; (2.1) anillo en el índice que mueve el cursor: verde FULL, amarillo PARTIAL, naranja INDEX |
@@ -247,6 +247,7 @@ visionQueue        Vision + PointerTracker (HandPresenceFilter) + CursorControll
 | `Cursor/` | `CursorController`, `CursorControlState`, `DeadZoneFilter`, `CursorMapper`, `AdaptiveCursorSmoother`, `CursorSmoother` (EMA fija, referencia y `GestureEngine`), `ScreenMapper` |
 | `Gestures/` | `HandScale`, `PinchRecognizer`, `GestureStateMachine`, `GestureEngine` |
 | `Calibration/` | `ActiveAreaCalibration` |
+| `Permissions/` | `AccessibilityPermissionTracker` (cuándo consultar el permiso de Accesibilidad, prompt una sola vez; la respuesta real la da la app) |
 
 ## Reglas de seguridad
 

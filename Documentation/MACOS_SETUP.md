@@ -66,7 +66,7 @@ Lógica pura (solo Foundation). La app lo consume como paquete local
 
 ```bash
 cd AirTrackCore
-swift test          # esperado: Executed 229 tests, with 0 failures
+swift test          # esperado: Executed 240 tests, with 0 failures
 ```
 
 ## F. Abrir el proyecto
@@ -102,8 +102,11 @@ Hace falta para que el índice mueva el cursor. En el panel, sección **Cursor**
 3. En Configuración del Sistema → Privacidad y seguridad → **Accesibilidad**, activa AirTrack.
 4. Vuelve a la app: en ≤ 1 s aparece `Permission: READY`.
 
-Si tras recompilar macOS "olvida" el permiso (firma ad-hoc): quita AirTrack de la lista con
-"−" y vuelve a añadirlo, o ejecuta `tccutil reset Accessibility com.airtrack.AirTrack`.
+Si la lista dice permitido pero AirTrack dice `REQUIRED` (típico tras recompilar con firma
+ad-hoc): sigue **PERMISSIONS.md → ACCESSIBILITY PERMISSION TROUBLESHOOTING**. En resumen: quitar
+todas las entradas "AirTrack" con "−", `tccutil reset Accessibility com.airtrack.AirTrack`,
+`tccutil reset PostEvent com.airtrack.AirTrack`, ⌘R y "Conceder permiso". Solución permanente:
+firmar con tu Personal Team.
 
 ## J. Firma y entitlements
 
@@ -199,4 +202,5 @@ desconexión, errores de Vision, mano adquirida/perdida); nunca frames.
 | `Camera FPS` bien pero `Vision FPS` muy bajo | Vision lento en este hardware | Reportar los números; la resolución se puede bajar en `CameraManager` |
 | `Capture → HandState` muestra "—" | El timestamp de captura no está en el reloj host | Reportarlo; la métrica se ajustará |
 | Puntos desalineados o espejados al revés | Transformación de coordenadas | Reportar la dirección exacta del error (sección M) |
+| Accesibilidad activada en la lista pero `Permission: REQUIRED` | La entrada pertenece a otro build (firma ad-hoc) | PERMISSIONS.md → ACCESSIBILITY PERMISSION TROUBLESHOOTING |
 | Warnings de Swift 6 Concurrency | Diferencias de SDK entre el CI y tu Xcode | Reportar el texto del warning |

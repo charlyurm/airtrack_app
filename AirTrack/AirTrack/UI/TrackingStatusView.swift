@@ -116,12 +116,14 @@ struct TrackingStatusView: View {
                     Button(model.accessibilityRequested ? "Abrir Configuración" : "Conceder permiso") {
                         model.requestAccessibility()
                     }
-                    if model.accessibilityRequested {
-                        Text("Actívalo en Privacidad y seguridad → Accesibilidad.")
-                            .font(.caption2).foregroundStyle(.secondary)
-                    }
+                    Button("Comprobar de nuevo") { model.recheckAccessibility() }
+                }
+                if model.accessibilityRequested {
+                    Text("Actívalo en Privacidad y seguridad → Accesibilidad y vuelve a AirTrack: se comprueba solo al volver.")
+                        .font(.caption2).foregroundStyle(.secondary)
                 }
             }
+            accessibilityDiagnostics
             Button(model.cursorPaused ? "Reanudar (⌃⌥⌘A)" : "Pausar (⌃⌥⌘A)") { model.toggleCursorPause() }
                 .keyboardShortcut("a", modifiers: [.control, .option, .command])
                 .disabled(!model.cursorEnabled)
@@ -163,6 +165,28 @@ struct TrackingStatusView: View {
         case .paused, .waitingForHand: .orange
         case .waitingForPermission: .red
         }
+    }
+
+    /// What macOS evaluates for THIS process. If System Settings shows AirTrack allowed but
+    /// both answers are "no", the entry belongs to another build (see PERMISSIONS.md).
+    private var accessibilityDiagnostics: some View {
+        let d = model.accessibilityDiagnostics
+        return DisclosureGroup("Diagnóstico de Accesibilidad") {
+            VStack(alignment: .leading, spacing: 4) {
+                row("AX trusted", d.processTrusted ? "sí" : "no", color: d.processTrusted ? .green : .orange)
+                row("Post events", d.canPostEvents ? "sí" : "no", color: d.canPostEvents ? .green : .orange)
+                row("Bundle ID", d.bundleIdentifier)
+                row("Firma", d.signatureLabel)
+                Text(d.executablePath)
+                    .font(.caption2.monospaced()).foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                if d.signature == .adHoc {
+                    Text("Firma ad-hoc: macOS asocia el permiso a ESTE binario exacto. Tras cada recompilación, la entrada de Accesibilidad puede seguir activada pero ya no aplicar. Quítala con «−» y vuelve a pulsar «Conceder permiso», o firma con tu Personal Team.")
+                        .font(.caption2).foregroundStyle(.orange)
+                }
+            }
+        }
+        .font(.caption)
     }
 
     private var pointerLabel: String {
