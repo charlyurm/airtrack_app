@@ -224,7 +224,8 @@ final class CursorControllerTests: XCTestCase {
         var c = CursorController(settings: settings(blend: 0.2))
         let cursorNow = Point2D(x: 360, y: 225) // where the system cursor currently is
         let first = move(&c, to: Point2D(x: 0.5, y: 0.5), t: 1.0, cursor: cursorNow)!
-        XCTAssertPointEqual(first.screen, cursorNow, accuracy: 1e-6, "no jump on (re)acquisition")
+        // No jump on (re)acquisition: the first position is where the cursor already was.
+        XCTAssertPointEqual(first.screen, cursorNow, accuracy: 1e-6)
         let halfway = move(&c, to: Point2D(x: 0.5, y: 0.5), t: 1.1, cursor: nil)!
         XCTAssertPointEqual(halfway.screen, Point2D(x: 540, y: 337.5), accuracy: 1e-6)
         let done = move(&c, to: Point2D(x: 0.5, y: 0.5), t: 1.25, cursor: nil)!
