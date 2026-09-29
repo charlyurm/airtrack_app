@@ -35,6 +35,8 @@ struct TrackingStatusView: View {
 
                 cursorSection
 
+                gestureSection
+
                 permissionSection
 
                 section("Cámara") {
@@ -187,6 +189,63 @@ struct TrackingStatusView: View {
             }
         }
         .font(.caption)
+    }
+
+    // MARK: Gestures (PHASE 3A)
+
+    private var gestureSection: some View {
+        let i = model.interaction
+        return section("Gestos (PHASE 3A)") {
+            row("Pose", poseLabel(i.pose), color: i.pose == .unknown ? .secondary : .primary)
+            if i.rawPose != i.pose {
+                Text("raw: \(poseLabel(i.rawPose))").font(.caption2.monospaced()).foregroundStyle(.secondary)
+            }
+            row("Dedos T I M R L", fingerLabel(i.features))
+            row("Escala mano", format(i.features?.scale, "%.3f"))
+            row("Velocidad mano", String(format: "%.2f esc/s", i.handSpeed))
+            row("Eje", i.axis.rawValue.uppercased())
+            row("Candidato", candidateLabel(i.candidate))
+            row("Intent", i.intent.map(kindLabel) ?? "—", color: i.intent == nil ? .secondary : .green)
+            row("Lifecycle", i.lifecycle.rawValue.uppercased())
+            row("Cursor policy", i.cursorPolicy == .frozen ? "FROZEN" : "FOLLOW",
+                color: i.cursorPolicy == .frozen ? .orange : .primary)
+            Text("E = extendido · B = doblado · ? = incierto. Escala y velocidad en tamaños de mano.")
+                .font(.caption2).foregroundStyle(.secondary)
+        }
+    }
+
+    private func poseLabel(_ pose: HandPose) -> String {
+        switch pose {
+        case .pointing: "POINTING ☝️"
+        case .twoFinger: "TWO_FINGER ☝️🖕"
+        case .openHand: "OPEN_HAND 🖐️"
+        case .fourFinger: "FOUR_FINGER"
+        case .pinch: "PINCH 🤏"
+        case .unknown: "UNKNOWN"
+        }
+    }
+
+    private func fingerLabel(_ features: HandFeatures?) -> String {
+        guard let features else { return "—" }
+        return Finger.allCases.map { finger in
+            switch features.state(of: finger) {
+            case .extended: "E"
+            case .bent: "B"
+            case .unknown: "?"
+            }
+        }.joined(separator: " ")
+    }
+
+    private func kindLabel(_ kind: GestureKind) -> String {
+        switch kind {
+        case .twoFingerScroll: "SCROLL 2 dedos"
+        case .openHandScroll: "SCROLL mano abierta"
+        }
+    }
+
+    private func candidateLabel(_ candidate: GestureCandidate?) -> String {
+        guard let candidate else { return "—" }
+        return "\(kindLabel(candidate.kind)) · \(Int((candidate.evidence * 100).rounded())) %"
     }
 
     private var pointerLabel: String {

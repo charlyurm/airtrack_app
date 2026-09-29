@@ -29,6 +29,8 @@ struct TrackingResult: Sendable {
     let pointer: PointerObservation
     /// Width / height of the processed frame (positions the pointer marker in the preview).
     let imageAspectRatio: Double
+    /// PHASE 3A: interaction layer output (pose, candidate, intent, lifecycle, cursor policy).
+    let interaction: InteractionFrame
     /// Cursor position posted this frame; nil when the cursor was not moved.
     let cursor: CursorUpdate?
 }
@@ -68,6 +70,7 @@ final class HandTrackingPipeline: @unchecked Sendable {
     // visionQueue only
     private let engine = VisionHandTrackingEngine()
     private var pointerTracker = PointerTracker()
+    private var interactionEngine = InteractionEngine()
     private var cursorController = CursorController()
     private let events = MacOSEventController()
     private var lastHandCount = 0
@@ -104,6 +107,7 @@ final class HandTrackingPipeline: @unchecked Sendable {
         visionQueue.async { [self] in
             cursorController.apply(settings)
             pointerTracker.apply(settings)
+            interactionEngine.apply(settings)
         }
     }
 
@@ -122,6 +126,7 @@ final class HandTrackingPipeline: @unchecked Sendable {
         visionQueue.async { [self] in
             pointerTracker.reset()
             cursorController.reset()
+            interactionEngine.reset()
             if lastHandCount > 0 { Log.tracking.info("Tracking reset") }
             lastHandCount = 0
             lastPointerMode = .lost
@@ -175,6 +180,9 @@ final class HandTrackingPipeline: @unchecked Sendable {
             Log.tracking.debug("Pointer \(tracked.pointer.mode.rawValue, privacy: .public)")
             lastPointerMode = tracked.pointer.mode
         }
+        // PHASE 3A-1: shadow mode. The interaction engine only observes; the cursor path below
+        // is exactly Phase 2.1 and no gesture event is posted.
+        let interaction = interactionEngine.update(pointer: tracked.pointer, trackedHand: tracked.trackedHand)
         let cursor = updateCursor(pointer: tracked.pointer)
         onResult?(TrackingResult(
             hands: hands,
@@ -182,6 +190,7 @@ final class HandTrackingPipeline: @unchecked Sendable {
             rejections: pointerTracker.lastRejections,
             pointer: tracked.pointer,
             imageAspectRatio: frame.aspectRatio,
+            interaction: interaction,
             cursor: cursor
         ))
 

@@ -51,6 +51,8 @@ final class AppModel {
     private(set) var pointerLosses = 0
     /// Aspect ratio of the latest processed frame (overlay geometry).
     private(set) var imageAspectRatio = 16.0 / 9.0
+    /// PHASE 3A: interaction layer of the latest frame (debug panel).
+    private(set) var interaction = InteractionFrame.idle(at: 0)
     @ObservationIgnored private var activationObserver: NSObjectProtocol?
 
     let camera: CameraManager
@@ -230,6 +232,7 @@ final class AppModel {
         if status != .running {
             hands = []
             pointer = .lost(at: 0)
+            interaction = .idle(at: 0)
             candidateCount = 0
             rejections = []
         }
@@ -250,6 +253,7 @@ final class AppModel {
         if pointer.mode == .holding, result.pointer.mode.providesPointer { bridgedGaps += 1 }
         if pointer.mode != .lost, result.pointer.mode == .lost { pointerLosses += 1 }
         pointer = result.pointer
+        interaction = result.interaction
         if result.imageAspectRatio.isFinite, result.imageAspectRatio > 0 { imageAspectRatio = result.imageAspectRatio }
         if !result.hands.isEmpty { hasSeenHand = true }
     }
@@ -261,6 +265,7 @@ final class AppModel {
         hasSeenHand = false
         cursor = nil
         pointer = .lost(at: 0)
+        interaction = .idle(at: 0)
         bridgedGaps = 0
         pointerLosses = 0
         metrics = TrackingMetrics()

@@ -63,6 +63,10 @@ public struct PointerTrackingFrame: Equatable, Sendable {
     /// Strictly validated, acquired hands (HandPresenceFilter output, unchanged from Phase 1.1).
     public var hands: [HandState]
     public var pointer: PointerObservation
+    /// PHASE 3A: the observation (this frame only) of the hand the pointer follows.
+    /// FULL: a strictly valid hand. PARTIAL / INDEX: the degraded observation, which does
+    /// NOT carry full gesture features. HOLD / LOST: nil (no fresh landmarks).
+    public var trackedHand: HandState? = nil
 }
 
 /// Limits of degraded tracking. All values are UNCALIBRATED starting points (REQUIRES MACOS).
@@ -192,6 +196,8 @@ public struct PointerTracker: Sendable {
     public private(set) var presenceFilter: HandPresenceFilter
     public private(set) var mode: PointerTrackingMode = .lost
     private var session: Session?
+    /// Hand used by `track` in the current update (scratch, reset every frame).
+    private var trackedHandThisFrame: HandState?
 
     private struct Session: Sendable {
         var lastTip: Point2D
@@ -232,9 +238,11 @@ public struct PointerTracker: Sendable {
     ///   - timestamp: capture time of that frame.
     public mutating func update(candidates: [HandState], timestamp: TimeInterval) -> PointerTrackingFrame {
         let hands = presenceFilter.update(candidates: candidates)
+        trackedHandThisFrame = nil
         let pointer = track(candidates: candidates, hands: hands, timestamp: timestamp)
         mode = pointer.mode
-        return PointerTrackingFrame(hands: hands, pointer: pointer)
+        let tracked = pointer.mode.providesPointer ? trackedHandThisFrame : nil
+        return PointerTrackingFrame(hands: hands, pointer: pointer, trackedHand: tracked)
     }
 
     public mutating func reset() {
@@ -255,6 +263,7 @@ public struct PointerTracker: Sendable {
            tip.confidence >= c.minimumLandmarkConfidence, tip.position.isFinite {
             let starts = session == nil
             refreshFull(with: primary, tip: tip.position, at: t)
+            trackedHandThisFrame = primary
             return PointerObservation(mode: .full, indexTip: tip.position, indexConfidence: tip.confidence, timestamp: t, startsSession: starts)
         }
 
@@ -270,6 +279,7 @@ public struct PointerTracker: Sendable {
 
         // 3. Continuation of the established hand.
         if let found = bestContinuation(in: candidates, session: s, timestamp: t, elapsed: elapsed) {
+            trackedHandThisFrame = found.hand
             switch found.mode {
             case .full:
                 refreshFull(with: found.hand, tip: found.tip.position, at: t)
