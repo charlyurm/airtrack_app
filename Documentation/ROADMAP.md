@@ -10,9 +10,9 @@ y Hand Tracking como fases separadas):
 | **PHASE 2** | Cursor Control | **VALIDATED on the real Mac** con G, H, J y L parciales (→ 2.1) |
 | **PHASE 2.1** | Adaptive Cursor & Peripheral Hand Tracking | **VALIDATED on the real Mac** (confirmado por el usuario) |
 | **PHASE 3A-1** | Gesture Engine Foundation (modo sombra) | **IMPLEMENTED — PHYSICAL VALIDATION PENDING** (`PHASE3A1_RESULT.md`) |
-| **PHASE 3A-2** | Scroll: 2 dedos y mano abierta, inercia, congelación del cursor | **IMPLEMENTED — PHYSICAL VALIDATION PENDING** (`PHASE3A2_RESULT.md`) |
-| PHASE 3B | Left click | NOT STARTED |
-| PHASE 3C | Drag | NOT STARTED |
+| **PHASE 3A-2** | Scroll: 2 dedos y mano abierta, inercia, congelación del cursor | Probada en el Mac tras el fix de scroll: "estable para seguir" |
+| **PHASE 3B** | Left click + drag (pinch índice + pulgar), según `PHASE3B_MASTER_SPEC.md` | **IMPLEMENTED — PENDING USER VALIDATION** (`PHASE3B_RESULT.md`) |
+| PHASE 3C | (Drag: incluido en 3B por su especificación) | — |
 | PHASE 3D | Zoom | NOT STARTED |
 | PHASE 3E | Swipe (2 y 4 dedos) | NOT STARTED |
 | PHASE 3F | Double click | NOT STARTED |
@@ -22,9 +22,10 @@ y Hand Tracking como fases separadas):
 | PHASE 6 | Optimization | NOT STARTED |
 | PHASE 7+ | Advanced Gestures | NOT STARTED |
 
-La lógica de click/drag de PHASE 0 (`GestureStateMachine`) sigue en AirTrackCore sin conectar;
-3B/3C la integrarán en el `InteractionEngine`. Una fase se completa cuando funciona en un Mac
-real, no cuando existen tests. PHASE 3B no empieza hasta validar 3A-1 + 3A-2 en el Mac.
+La lógica de click/drag de PHASE 0 (`GestureStateMachine`) sigue en AirTrackCore sin conectar
+(código legado con sus tests); PHASE 3B no la reconecta: el click y el drag son una familia
+nueva (`pinch`) del `InteractionEngine`. Una fase se completa cuando funciona en un Mac real,
+no cuando existen tests.
 
 ## Flujo de trabajo
 
@@ -114,7 +115,7 @@ PHASE 3 no empieza hasta que el usuario confirme A–N en el Mac.
 | Smoothing del cursor | Adaptativo por velocidad y basado en tiempo (2.1): reposo 0.6, response 1.0 | Calibrar con la prueba M; interpolación a la frecuencia de pantalla (PHASE 6) |
 | Scroll (3A-2) | 250 pt/escala, deadband 0.15 escalas/s, commit 0.12 escalas, congelación a 0.09 s, inercia τ 0.3 s ≤ 1 s | Calibrar en el Mac; dirección frente a "Desplazamiento natural" por verificar |
 | Tracking periférico | Confianza 0.5/0.6, 3 alturas/s, HOLD 0.15 s, 3 s degradado, 1 s solo índice | Calibrar con la prueba N; active area más alto si Vision pierde la mano en el borde |
-| Umbrales de pinch | Ratios 0.25 / 0.35, no calibrados | Calibración por usuario (PHASE 5) |
+| Umbrales de pinch | 3B: 0.25 / 0.35 escalas de mano (Phase 3), confianza de puntas 0.5, drag 0.15 neto, click ≤ 1 s; no calibrados | Calibrar en el Mac; ancla con mirada atrás si el click cae desplazado; calibración por usuario (PHASE 5) |
 | Cursor | Active area 0.15–0.85, sensibilidad 1, smoothing 0.6 adaptativo, dead zone 0.003, blend 0.2 s (sliders sin persistir) | Calibración y persistencia (PHASE 5) |
 | Atajo de pausa | ⌃⌥⌘A solo con AirTrack en primer plano | Atajo global (PHASE 5) |
 | Referencia de tamaño de mano | wrist → indexMCP (2D) | Otro segmento rígido si la rotación de la mano lo vuelve inestable |

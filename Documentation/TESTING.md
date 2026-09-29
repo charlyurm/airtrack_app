@@ -7,7 +7,7 @@ cd AirTrackCore
 swift test
 ```
 
-Total: **353 tests** en 26 suites (incluye `ScrollContinuityTests`, 14, del fix de scroll) (85 hasta PHASE 1 + 47 de PHASE 1.1 + 44 de PHASE 2 + 53 de PHASE 2.1 + 11 del hotfix de Accesibilidad + 58 de PHASE 3A-1 + 36 de PHASE 3A-2). Detalle de 3A en `PHASE3A1_RESULT.md` §3 y `PHASE3A2_RESULT.md` §3.
+Total: **410 tests** en 29 suites (85 hasta PHASE 1 + 47 de PHASE 1.1 + 44 de PHASE 2 + 53 de PHASE 2.1 + 11 del hotfix de Accesibilidad + 58 de PHASE 3A-1 + 36 de PHASE 3A-2 + 19 del fix de scroll + 57 de PHASE 3B). Detalle de 3A en `PHASE3A1_RESULT.md` §3 y `PHASE3A2_RESULT.md` §3; de 3B en `PHASE3B_RESULT.md` §8.
 
 | Suite | Tests | Cubre |
 |---|---|---|
@@ -35,6 +35,9 @@ Total: **353 tests** en 26 suites (incluye `ScrollContinuityTests`, 14, del fix 
 | `PointerTrackerTrackedHandTests` (3A-1) | 2 | `trackedHand` por modo, decisiones sin cambios |
 | `ScrollControllerTests` (3A-2) | 18 | deadband, velocidad, fracciones, fases, inercia acotada |
 | `ScrollInteractionTests` (3A-2) | 18 | scroll live, conflictos, bloqueo de eje, inercia, cursor, tracking, seguridad de la salida |
+| `PinchRecognitionTests` (3B) | 14 | entrar/salir, histéresis, un frame ruidoso, parpadeo, confianza baja, tamaños de mano, orientaciones, vista parcial, punta ocluida, timeout sin click, puño |
+| `ClickDragTests` (3B) | 33 | click único, repetidos, largo = nada, movimiento pequeño, cursor congelado; drag: umbral, lento/normal/rápido, ejes, diagonal, vuelta al inicio, HOLD, LOST, gracia, vista parcial, cancel/reset/salida apagada, sombra; conflictos con scroll e inercia |
+| `ClickDragSafetyTests` (3B) | 10 | invariantes del botón con 16 secuencias aleatorias reproducibles, exclusividad click/drag, `PinchIntentController`, `DragController` (ancla, clamp, libro del botón) |
 | `HandOrderingTests` (1.1) | 6 | 0/1/2 manos, izquierda → derecha independiente del orden de entrada, desempate por altura, centroide sin muñeca, descarte de manos vacías |
 
 ### Tests de drag (`GestureStateMachineTests`)
@@ -87,6 +90,7 @@ real de tests y builds es la del CI.
 | `03134e5` (3A-1) | 298/298 | verde | Build OK. Único warning: AppIntents |
 | `a6a77a6` (3A-2) | 334/334, 0 failures | 334/334, 0 failures | `** BUILD SUCCEEDED **`. Único warning: AppIntents (benigno) |
 | `1ba88f5` (fix scroll 3A) | 353/353, 0 failures | 353/353, 0 failures | `** BUILD SUCCEEDED **`. Único warning: AppIntents (benigno) |
+| `708f440` (3B) | 410/410, 0 failures | 410/410, 0 failures | `** BUILD SUCCEEDED **`. Único warning: AppIntents (benigno) |
 
 ## Validación manual — DEFERRED TO LOCAL MAC VALIDATION
 
@@ -110,8 +114,9 @@ La checklist detallada (qué hacer y qué esperar) está en `MACOS_SETUP.md`, se
 PHASE 2 (cursor): pruebas A–L en `PHASE2_RESULT.md` §15 y `MACOS_SETUP.md` §P.
 PHASE 2.1 (cursor adaptativo y tracking periférico): pruebas A–N en `PHASE2_1_RESULT.md` §9.
 PHASE 3A-1 (poses, modo sombra): pruebas A–J en `PHASE3A1_RESULT.md` §6. PHASE 3A-2 (scroll):
-pruebas 1–16 en `PHASE3A2_RESULT.md` §7.
+pruebas 1–16 en `PHASE3A2_RESULT.md` §7. PHASE 3B (click y drag): pruebas 1–32 en
+`PHASE3B_RESULT.md` §11.
 
 Pendientes de fases posteriores:
-- [ ] Click, double click y drag reales (PHASE 3)
+- [ ] Click y drag reales (PHASE 3B, implementados, pendientes de validar); double click (3F)
 - [ ] Calibración de los umbrales de pinch con manos reales

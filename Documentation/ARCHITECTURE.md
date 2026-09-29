@@ -94,6 +94,24 @@ PointerTracker ──(trackedHand, modo)──▶ InteractionEngine (Core, visio
 
 Detalle: `PHASE3A1_RESULT.md`, `PHASE3A2_RESULT.md`.
 
+### Click y drag (PHASE 3B)
+
+```text
+IntentArbiter (dueño: pinch) → PinchIntentController → .leftClick / .beginDrag / .endDrag
+   pipeline: botones ANTES de mover el cursor este frame
+     .leftClick  → MacOSEventController.postLeftClick (down + up, click state 1)
+     .beginDrag  → DragController.press (libro del botón) → leftMouseDown
+     política .drag → CursorController mapea el índice (sin blend) → DragController.follow
+                      (offset fijo) → leftMouseDragged  (único escritor del cursor)
+     .endDrag    → DragController.release → leftMouseUp → CursorController.reset (glide 2.1)
+```
+
+- Salida por familia (`InteractionOutputs`: `.scroll`, `.pointerButton`); una familia apagada
+  queda en sombra. `appliedCursorPolicy` es la política que el pipeline aplica de verdad.
+- Invariante: si el botón está abajo y la política aplicada no es `.drag`, o el cursor no está
+  permitido, el pipeline envía el mouseUp. `closeInteraction` (pausa, permiso, cámara, reset,
+  ajustes, cierre) siempre termina con una comprobación del libro del botón.
+
 ## Pipeline de PHASE 1 / 1.1
 
 ```text
@@ -271,10 +289,10 @@ visionQueue        Vision + PointerTracker (HandPresenceFilter) + CursorControll
 | `Models/` | `HandJoint`, `Finger`, `HandSkeleton`, `HandChirality`, `HandState`, `InteractionAction`, `AirTrackSettings`, `KeyboardShortcut`, `LandmarkCoordinateConversion` |
 | `Geometry/` | `Point2D`, `Rect2D`, `PreviewGeometry` |
 | `Tracking/` | `HandValidation`, `HandPresenceFilter`, `HandOrdering`, `PointerTracker` (+ `PointerTrackingMode`, `PointerObservation`, `PointerTrackingConfiguration`) |
-| `Cursor/` | `CursorController`, `CursorControlState`, `DeadZoneFilter`, `CursorMapper`, `AdaptiveCursorSmoother`, `CursorSmoother` (EMA fija, referencia y `GestureEngine`), `ScreenMapper` |
+| `Cursor/` | `CursorController`, `CursorControlState`, `DeadZoneFilter`, `CursorMapper`, `AdaptiveCursorSmoother`, `CursorSmoother` (EMA fija, referencia y `GestureEngine`), `ScreenMapper`, `DragController` (3B: ancla del drag + libro del botón) |
 | `Gestures/` | `HandScale`, `PinchRecognizer`, `GestureStateMachine`, `GestureEngine` |
 | `Calibration/` | `ActiveAreaCalibration` |
-| `Interaction/` (3A) | `HandFeatures`/`HandFeatureExtractor`, `FeatureHistory`/`RingBuffer`, `PoseClassifier`, `GestureRecognizer`/`ScrollRecognizer`/`GestureCandidate`, `IntentArbiter`, `InteractionEngine`/`InteractionFrame`, `ScrollController` |
+| `Interaction/` (3A, 3B) | `HandFeatures`/`HandFeatureExtractor`, `FeatureHistory`/`RingBuffer`, `PoseClassifier`, `GestureRecognizer`/`ScrollRecognizer`/`PinchGestureRecognizer`/`GestureCandidate`, `IntentArbiter`, `InteractionEngine`/`InteractionFrame`/`InteractionOutputs`/`PinchStatus`, `ScrollController`, `PinchIntentController` |
 | `Permissions/` | `AccessibilityPermissionTracker` (cuándo consultar el permiso de Accesibilidad, prompt una sola vez; la respuesta real la da la app) |
 
 ## Reglas de seguridad
@@ -285,7 +303,9 @@ visionQueue        Vision + PointerTracker (HandPresenceFilter) + CursorControll
 - Sin permiso de cámara, la app arranca igual y muestra cómo concederlo.
 - Una cámara desconectada muestra `DISCONNECTED`, no `ERROR`.
 - Cerrar la ventana cierra la app, así que la cámara no queda encendida.
-- (Core) Tracking loss o pausa durante un drag → `mouseUp`; el drag no tiene saltos.
+- (3B) Todo mouseDown tiene exactamente un mouseUp: suelta, LOST, gracia agotada, pausa,
+  Cursor Control, Accesibilidad, cámara, reset y cierre de la app. Nunca click tras un drag,
+  tras una pérdida de tracking ni con el botón pulsado.
 
 ## Decisiones
 

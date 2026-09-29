@@ -30,7 +30,27 @@ smoothing y dead zone.
 **Decisión provisional — smoothing por frame:** la EMA se aplica por frame, así que el lag
 efectivo depende del FPS. Mejora futura: **time-based smoothing**. No se implementa todavía.
 
-## Pinch
+## Click y drag — PHASE 3B (motor actual)
+
+🤏 índice + pulgar, familia `pinch` del `InteractionEngine` (detalle: `PHASE3B_RESULT.md`).
+
+- **Confirmación:** pose estable PINCH (2 frames), distancia de puntas ≤ 0.25 escalas de mano,
+  confianza de ambas puntas ≥ 0.5, tracking FULL, sin otro dueño y pinch armado. El cursor se
+  congela desde ese momento (el click cae donde apuntabas).
+- **Suelta:** distancia > 0.35 en 2 frames medidos seguidos. Incierto (punta ocluida, HOLD) =
+  suspendido ≤ 0.25 s; agotarlo no hace click.
+- **Click:** suelta limpia con tracking FULL, sin HOLD durante el pinch, ≤ 1 s, movimiento neto
+  < 0.15 escalas. Uno por pinch.
+- **Drag:** mientras se mantiene, movimiento neto de los nudillos ≥ 0.15 escalas → mouseDown.
+  Ancla fija `offset = cursor − índice`; el índice pasa por el mapeo del cursor de 2.1. Cualquier
+  fin (suelta, pérdida, pausa, cierre) → un mouseUp; nunca un click.
+- **Conflictos:** un pinch que termina un scroll o corta su inercia no hace nada hasta que se
+  abre; durante un drag no empieza ningún scroll.
+
+Las secciones siguientes (pinch por ratio, máquina de estados, pérdida) describen el motor de
+**PHASE 0**, que sigue sin conectar.
+
+## Pinch (PHASE 0, legado)
 
 ```text
 ratio = distancia(thumbTip, indexTip) / distancia(wrist, indexMCP)
@@ -50,7 +70,7 @@ consecutivos** (~33 ms a 30 fps). Se mantiene así para evitar falsos positivos.
 Tras medir en hardware real se decidirá si reducir la confirmación, usar timestamps,
 predicción u otro filtro.
 
-## Máquina de estados: click, double click y drag
+## Máquina de estados: click, double click y drag (PHASE 0, legado)
 
 | Fase | Qué envía a macOS |
 |---|---|
@@ -124,6 +144,5 @@ tenga conflictos en tu Mac.
 
 ## Aún no implementado
 
-- Click, doble click y drag en el motor nuevo (3B, 3F, 3C). La máquina de estados de este
-  documento (PHASE 0) sigue sin conectar.
-- Zoom (3D), swipe de 2 y 4 dedos (3E), click derecho (3G).
+- Doble click (3F; 3B ya guarda los tiempos de cada click), zoom (3D), swipe de 2 y 4 dedos
+  (3E), click derecho (3G). La máquina de estados de PHASE 0 sigue sin conectar.
