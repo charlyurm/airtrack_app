@@ -1,0 +1,41 @@
+name: AirTrackCore Tests
+
+on:
+  push:
+    paths:
+      - "AirTrackCore/**"
+      - ".github/workflows/airtrackcore-tests.yml"
+  pull_request:
+    paths:
+      - "AirTrackCore/**"
+      - ".github/workflows/airtrackcore-tests.yml"
+  workflow_dispatch:
+
+jobs:
+  macos:
+    name: swift test (macOS)
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: |
+          sw_vers
+          uname -m
+          xcodebuild -version
+          swift --version
+      - name: Build and test
+        working-directory: AirTrackCore
+        run: swift test
+
+  linux:
+    name: swift test (Linux, proves hardware independence)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: swift --version
+      - name: Build and test
+        working-directory: AirTrackCore
+        run: swift test
