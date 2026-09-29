@@ -1,29 +1,32 @@
 import XCTest
 @testable import AirTrackCore
 
+/// Thresholds and offsets are dyadic (1/32, 1/64 …) and inside the allowed range (≤ 0.05),
+/// so the boundary comparisons are exact.
 final class DeadZoneFilterTests: XCTestCase {
+    private let threshold = 0.03125 // 1/32
     func testFirstPointPassesThrough() {
-        var f = DeadZoneFilter(threshold: 0.25)
+        var f = DeadZoneFilter(threshold: threshold)
         XCTAssertEqual(f.apply(Point2D(x: 0.5, y: 0.5)), Point2D(x: 0.5, y: 0.5))
     }
 
     func testBelowThresholdHoldsTheAnchor() {
-        var f = DeadZoneFilter(threshold: 0.25)
+        var f = DeadZoneFilter(threshold: threshold)
         _ = f.apply(Point2D(x: 0.5, y: 0.5))
-        XCTAssertEqual(f.apply(Point2D(x: 0.625, y: 0.5)), Point2D(x: 0.5, y: 0.5))
+        XCTAssertEqual(f.apply(Point2D(x: 0.515625, y: 0.5)), Point2D(x: 0.5, y: 0.5)) // +1/64
     }
 
     func testExactlyThresholdHoldsTheAnchor() {
-        var f = DeadZoneFilter(threshold: 0.25)
+        var f = DeadZoneFilter(threshold: threshold)
         _ = f.apply(Point2D(x: 0.5, y: 0.5))
-        XCTAssertEqual(f.apply(Point2D(x: 0.75, y: 0.5)), Point2D(x: 0.5, y: 0.5))
+        XCTAssertEqual(f.apply(Point2D(x: 0.53125, y: 0.5)), Point2D(x: 0.5, y: 0.5)) // exactly +1/32
     }
 
     func testAboveThresholdPassesThroughAndReanchors() {
-        var f = DeadZoneFilter(threshold: 0.25)
+        var f = DeadZoneFilter(threshold: threshold)
         _ = f.apply(Point2D(x: 0.5, y: 0.5))
-        XCTAssertEqual(f.apply(Point2D(x: 0.8125, y: 0.5)), Point2D(x: 0.8125, y: 0.5))
-        XCTAssertEqual(f.anchor, Point2D(x: 0.8125, y: 0.5))
+        XCTAssertEqual(f.apply(Point2D(x: 0.546875, y: 0.5)), Point2D(x: 0.546875, y: 0.5)) // +3/64
+        XCTAssertEqual(f.anchor, Point2D(x: 0.546875, y: 0.5))
     }
 
     func testStationaryFingerWithNoiseProducesAConstantOutput() {
@@ -48,11 +51,17 @@ final class DeadZoneFilterTests: XCTestCase {
     }
 
     func testResetForgetsTheAnchor() {
-        var f = DeadZoneFilter(threshold: 0.25)
+        var f = DeadZoneFilter(threshold: threshold)
         _ = f.apply(Point2D(x: 0.5, y: 0.5))
         f.reset()
         XCTAssertNil(f.anchor)
         XCTAssertEqual(f.apply(Point2D(x: 0.6, y: 0.5)), Point2D(x: 0.6, y: 0.5))
+    }
+
+    func testOversizedThresholdIsClampedSoRealMovementStillPasses() {
+        var f = DeadZoneFilter(threshold: 0.25) // clamped to 0.05
+        _ = f.apply(Point2D(x: 0.5, y: 0.5))
+        XCTAssertEqual(f.apply(Point2D(x: 0.625, y: 0.5)), Point2D(x: 0.625, y: 0.5))
     }
 
     func testThresholdIsClampedSoTheCursorCannotGetStuck() {
