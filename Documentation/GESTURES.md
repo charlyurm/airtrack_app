@@ -108,6 +108,22 @@ después (pointing):  cursor = dedo + residual · max(0, 1 − Δt / 0.2 s)
 porque Finder lo usa para "Ir a Aplicaciones". REQUIRES MACOS: verificar que no
 tenga conflictos en tu Mac.
 
+## Scroll (PHASE 3A-2)
+
+☝️🖕 (índice + medio, no hace falta que se toquen) o 🖐️ moviéndose en **vertical**.
+
+- Pose estable (histéresis) → candidato. Commit con ≥ 0.12 tamaños de mano de recorrido
+  vertical y con la vertical al menos ×2 sobre la horizontal. Horizontal o diagonal: nada.
+- Mientras dura: cursor congelado (desde 0.09 s de candidato estable), solo eje vertical,
+  respuesta proporcional a la velocidad de la palma (en tamaños de mano/s) con deadband suave
+  y acumulación de fracciones.
+- Al soltar con velocidad: inercia acotada (≤ 1 s). Parar la mano manteniendo la pose detiene
+  el scroll sin inercia. Un gesto nuevo (2 dedos, mano abierta, 4 dedos, pinch) corta la inercia.
+- Pérdida: HOLD → suspendido; PARTIAL/INDEX → fin con inercia; LOST → fin sin inercia.
+- Detalle: `PHASE3A2_RESULT.md`. Base (poses, árbitro, ciclo de vida): `PHASE3A1_RESULT.md`.
+
 ## Aún no implementado
 
-- Scroll con la mano abierta (PHASE 4).
+- Click, doble click y drag en el motor nuevo (3B, 3F, 3C). La máquina de estados de este
+  documento (PHASE 0) sigue sin conectar.
+- Zoom (3D), swipe de 2 y 4 dedos (3E), click derecho (3G).

@@ -67,6 +67,33 @@ MacOSEventController → CGEvent(.mouseMoved).post(.cghidEventTap)
 
 Detalle completo: `PHASE2_RESULT.md` y `PHASE2_1_RESULT.md`.
 
+## Motor de interacción (PHASE 3A)
+
+```text
+PointerTracker ──(trackedHand, modo)──▶ InteractionEngine (Core, visionQueue, por frame)
+   HandFeatureExtractor → FeatureHistory → PoseClassifier → [GestureRecognizer] → IntentArbiter
+   → ScrollController → InteractionFrame { cursorPolicy, actions, debug }
+        │ cursorPolicy == .frozen (y salida live)  → CursorController NO se alimenta y se reinicia
+        │ actions (.scroll)                        → MacOSEventController.post → CGEvent scroll-wheel
+```
+
+- **El cursor de Phase 2.1 no cambia:** la congelación es una política por encima de
+  `CursorController`. Al descongelar, la reacquisición existente (deslizamiento desde el cursor
+  real) lo devuelve. No hay un segundo sistema.
+- **Una sola fuente de continuidad:** `FeatureAvailability` se deriva del modo de
+  `PointerTracker` (FULL / HOLD / PARTIAL-INDEX / LOST). El motor no tiene temporizadores de
+  pérdida propios.
+- **Live frente a sombra:** la salida solo es live con Cursor Control permitido y "Scroll con
+  gestos" activo. Si no, el motor observa (3A-1) y el cursor es exactamente el de 2.1.
+- **Cierre garantizado:** pausa, desactivación, permiso perdido, cámara parada y cierre de la
+  app llaman a `InteractionEngine.cancel()` y publican las fases de cierre.
+- **Extensible:** cada gesto es un `GestureRecognizer` sin estado que propone
+  `GestureCandidate`s; solo el `IntentArbiter` hace commit (un dueño; la ambigüedad no hace
+  nada). Click, drag, zoom, swipe y click derecho serán reconocedores nuevos, no ramas de un
+  switch central.
+
+Detalle: `PHASE3A1_RESULT.md`, `PHASE3A2_RESULT.md`.
+
 ## Pipeline de PHASE 1 / 1.1
 
 ```text
@@ -247,6 +274,7 @@ visionQueue        Vision + PointerTracker (HandPresenceFilter) + CursorControll
 | `Cursor/` | `CursorController`, `CursorControlState`, `DeadZoneFilter`, `CursorMapper`, `AdaptiveCursorSmoother`, `CursorSmoother` (EMA fija, referencia y `GestureEngine`), `ScreenMapper` |
 | `Gestures/` | `HandScale`, `PinchRecognizer`, `GestureStateMachine`, `GestureEngine` |
 | `Calibration/` | `ActiveAreaCalibration` |
+| `Interaction/` (3A) | `HandFeatures`/`HandFeatureExtractor`, `FeatureHistory`/`RingBuffer`, `PoseClassifier`, `GestureRecognizer`/`ScrollRecognizer`/`GestureCandidate`, `IntentArbiter`, `InteractionEngine`/`InteractionFrame`, `ScrollController` |
 | `Permissions/` | `AccessibilityPermissionTracker` (cuándo consultar el permiso de Accesibilidad, prompt una sola vez; la respuesta real la da la app) |
 
 ## Reglas de seguridad

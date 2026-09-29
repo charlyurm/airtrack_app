@@ -7,7 +7,7 @@ cd AirTrackCore
 swift test
 ```
 
-Total: **240 tests** en 17 suites (85 hasta PHASE 1 + 47 de PHASE 1.1 + 44 de PHASE 2 + 53 de PHASE 2.1 + 11 del hotfix de Accesibilidad).
+Total: **334 tests** en 25 suites (85 hasta PHASE 1 + 47 de PHASE 1.1 + 44 de PHASE 2 + 53 de PHASE 2.1 + 11 del hotfix de Accesibilidad + 58 de PHASE 3A-1 + 36 de PHASE 3A-2). Detalle de 3A en `PHASE3A1_RESULT.md` §3 y `PHASE3A2_RESULT.md` §3.
 
 | Suite | Tests | Cubre |
 |---|---|---|
@@ -27,6 +27,14 @@ Total: **240 tests** en 17 suites (85 hasta PHASE 1 + 47 de PHASE 1.1 + 44 de PH
 | `PointerTrackerTests` (2.1) | 24 | adquisición estricta, parcial e índice tras la adquisición, mano saliendo por abajo, índice aislado/parcial desconocido nunca activa, salto, baja confianza, obsoleto, chirality, geometría, coherencia, HOLD, timeouts, reacquisición completa, desactivado = PHASE 2, determinismo, saneo |
 | `CursorPointerIntegrationTests` (2.1) | 11 | modos que mueven el cursor, HOLD sin eventos ni glide, LOST borra la sesión, glide desde el cursor real, borde inferior alcanzable con la palma fuera, un frame perdido no reinicia |
 | `AccessibilityPermissionTrackerTests` (hotfix 2.1) | 11 | concedido al iniciar (nunca WAITING FOR PERMISSION), denegado al iniciar, false → true al volver a la app, true → false (periódico), activación/acciones siempre consultan, periódico limitado a 1/s, sin estado obsoleto, prompt como mucho una vez, sin solicitud si ya hay permiso, reloj hacia atrás. La API real de TCC no se simula: solo se prueban las transiciones |
+| `HandFeaturesTests` (3A-1) | 13 | escala, invariancia (tamaño/posición/aspect/rotación), estados de dedo, UNKNOWN, ruido, NaN |
+| `PoseClassifierTests` (3A-1) | 9 | 5 poses, invariancia, ambiguas → UNKNOWN, histéresis |
+| `FeatureHistoryTests` (3A-1) | 7 | ring buffer acotado, velocidad/desplazamiento en escalas, espejo, eje dominante |
+| `IntentArbiterTests` (3A-1) | 9 | un dueño, ambigüedad, ciclo de vida, SUSPENDED, liberaciones |
+| `InteractionEngineTests` (3A-1) | 18 | reconocimiento de scroll en modo sombra, política del cursor, tracking, transiciones, sin acciones |
+| `PointerTrackerTrackedHandTests` (3A-1) | 2 | `trackedHand` por modo, decisiones sin cambios |
+| `ScrollControllerTests` (3A-2) | 18 | deadband, velocidad, fracciones, fases, inercia acotada |
+| `ScrollInteractionTests` (3A-2) | 18 | scroll live, conflictos, bloqueo de eje, inercia, cursor, tracking, seguridad de la salida |
 | `HandOrderingTests` (1.1) | 6 | 0/1/2 manos, izquierda → derecha independiente del orden de entrada, desempate por altura, centroide sin muñeca, descarte de manos vacías |
 
 ### Tests de drag (`GestureStateMachineTests`)
@@ -75,6 +83,9 @@ real de tests y builds es la del CI.
 | `4b117fc` (1.1) | 132/132, 0 failures | 132/132, 0 failures | Build OK. Único warning: el mismo de AppIntents (benigno) |
 | `dad01ad` (2) | 176/176, 0 failures | 176/176, 0 failures | Build OK. Único warning: AppIntents (benigno) |
 | `9d20d76` (2.1) | 229/229, 0 failures | 229/229, 0 failures (Swift 6.4) | `** BUILD SUCCEEDED **`. Único warning: AppIntents (benigno) |
+| `7d234e1` (hotfix Accesibilidad) | 240/240 | 240/240 | Build OK. Único warning: AppIntents |
+| `03134e5` (3A-1) | 298/298 | verde | Build OK. Único warning: AppIntents |
+| `a6a77a6` (3A-2) | 334/334, 0 failures | 334/334, 0 failures | `** BUILD SUCCEEDED **`. Único warning: AppIntents (benigno) |
 
 ## Validación manual — DEFERRED TO LOCAL MAC VALIDATION
 
@@ -97,6 +108,8 @@ La checklist detallada (qué hacer y qué esperar) está en `MACOS_SETUP.md`, se
 
 PHASE 2 (cursor): pruebas A–L en `PHASE2_RESULT.md` §15 y `MACOS_SETUP.md` §P.
 PHASE 2.1 (cursor adaptativo y tracking periférico): pruebas A–N en `PHASE2_1_RESULT.md` §9.
+PHASE 3A-1 (poses, modo sombra): pruebas A–J en `PHASE3A1_RESULT.md` §6. PHASE 3A-2 (scroll):
+pruebas 1–16 en `PHASE3A2_RESULT.md` §7.
 
 Pendientes de fases posteriores:
 - [ ] Click, double click y drag reales (PHASE 3)
