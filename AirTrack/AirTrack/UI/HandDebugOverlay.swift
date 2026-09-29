@@ -13,6 +13,10 @@ import SwiftUI
 struct HandDebugOverlay: View {
     let hands: [HandState]
     let mirrored: Bool
+    /// PHASE 2: region of the image that spans the whole screen (CursorMapper.effectiveArea),
+    /// in the cursor's mirrored space when `cursorMirrored`. Drawn dashed; nil hides it.
+    var activeArea: Rect2D? = nil
+    var cursorMirrored = true
 
     static let fingerColors: [Finger: Color] = [
         .thumb: .orange, .index: .green, .middle: .blue, .ring: .purple, .pinky: .pink,
@@ -20,6 +24,7 @@ struct HandDebugOverlay: View {
 
     var body: some View {
         Canvas { context, size in
+            if let activeArea { drawActiveArea(activeArea, in: &context, size: size) }
             for (index, hand) in hands.enumerated() {
                 draw(hand, number: index + 1, in: &context, size: size)
             }
@@ -78,6 +83,28 @@ struct HandDebugOverlay: View {
                 at: CGPoint(x: wrist.x, y: wrist.y + 16)
             )
         }
+    }
+
+    private func drawActiveArea(_ area: Rect2D, in context: inout GraphicsContext, size: CGSize) {
+        // Corners in cursor space → raw image space (undo the cursor mirror) → view.
+        let corners = [
+            Point2D(x: area.minX, y: area.minY), Point2D(x: area.maxX, y: area.minY),
+            Point2D(x: area.maxX, y: area.maxY), Point2D(x: area.minX, y: area.maxY),
+        ].compactMap { corner -> CGPoint? in
+            let raw = cursorMirrored ? Point2D(x: 1 - corner.x, y: corner.y) : corner
+            // The aspect ratio only positions the rect inside the letterbox; use the hands' if any.
+            let aspect = hands.first?.imageAspectRatio ?? 16.0 / 9.0
+            guard let v = PreviewGeometry.viewPoint(
+                for: raw, imageAspectRatio: aspect,
+                viewWidth: Double(size.width), viewHeight: Double(size.height), mirrored: mirrored
+            ) else { return nil }
+            return CGPoint(x: v.x, y: v.y)
+        }
+        guard corners.count == 4 else { return }
+        var path = Path()
+        path.addLines(corners)
+        path.closeSubpath()
+        context.stroke(path, with: .color(.white.opacity(0.7)), style: StrokeStyle(lineWidth: 1.5, dash: [6, 6]))
     }
 
     private func chiralityLabel(_ chirality: HandChirality) -> String? {

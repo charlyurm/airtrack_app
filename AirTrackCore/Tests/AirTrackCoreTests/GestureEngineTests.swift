@@ -102,7 +102,8 @@ final class GestureEngineTests: XCTestCase {
         guard case let .moveCursor(to)? = back.actions.first else {
             return XCTFail("expected a cursor move, got \(back.actions)")
         }
-        XCTAssertPointEqual(to, Point2D(x: (0.3 - 0.2) / 0.6, y: 0.5))
+        let area = CursorMapper.defaultActiveArea
+        XCTAssertPointEqual(to, Point2D(x: (0.3 - area.minX) / area.width, y: 0.5))
     }
 
     func testDefaultSettingsDoNotUseTheFinderShortcut() {

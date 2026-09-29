@@ -26,7 +26,12 @@ private struct PreviewPane: View {
             // Preview and overlay share this exact frame; the overlay recomputes the preview's
             // letterboxed image rect from the frame size and the image aspect ratio.
             CameraPreviewView(session: model.session, mirrored: model.mirrorPreview)
-            HandDebugOverlay(hands: model.hands, mirrored: model.mirrorPreview)
+            HandDebugOverlay(
+                hands: model.hands,
+                mirrored: model.mirrorPreview,
+                activeArea: model.settings.cursorMapper.effectiveArea,
+                cursorMirrored: model.settings.mirrorCamera
+            )
             if model.cameraStatus != .running {
                 Text(placeholder)
                     .font(.headline)

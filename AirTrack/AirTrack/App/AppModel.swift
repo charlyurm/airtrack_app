@@ -23,6 +23,19 @@ final class AppModel {
     /// Whether a hand has been seen since the camera started (distinguishes LOST from NO HAND).
     private(set) var hasSeenHand = false
 
+    // MARK: Cursor control (PHASE 2)
+
+    /// Off at launch: detecting a hand never starts moving the cursor by itself.
+    private(set) var cursorEnabled = false
+    private(set) var cursorPaused = false
+    private(set) var accessibilityGranted = AccessibilityPermissionManager.isGranted
+    /// Whether the macOS prompt was already shown this session (never prompt in a loop).
+    private(set) var accessibilityRequested = false
+    private(set) var settings = AirTrackSettings.default
+    /// Cursor position posted in the latest frame (nil = cursor not moved).
+    private(set) var cursor: CursorUpdate?
+    @ObservationIgnored private var lastAccessibilityCheck: TimeInterval = 0
+
     let camera: CameraManager
     let pipeline: HandTrackingPipeline
 
@@ -38,6 +51,15 @@ final class AppModel {
     }
 
     var handCount: Int { hands.count }
+
+    var cursorState: CursorControlState {
+        .resolve(
+            enabled: cursorEnabled,
+            paused: cursorPaused,
+            permissionGranted: accessibilityGranted,
+            handAvailable: cameraStatus == .running && !hands.isEmpty
+        )
+    }
 
     init() {
         let camera = CameraManager()
@@ -57,8 +79,9 @@ final class AppModel {
         }
         pipeline.onMetrics = { [weak self] metrics in
             guard let self else { return }
-            Self.deliver { self.metrics = metrics }
+            Self.deliver { self.apply(metrics) }
         }
+        pipeline.apply(settings)
     }
 
     /// Checks/requests permission and starts the camera. The app stays usable without permission.
@@ -103,6 +126,65 @@ final class AppModel {
         CameraPermissionManager.openSystemSettings()
     }
 
+    // MARK: Cursor control
+
+    func setCursorEnabled(_ enabled: Bool) {
+        cursorEnabled = enabled
+        if enabled {
+            cursorPaused = false
+            refreshAccessibility(force: true)
+        }
+        syncCursorControl()
+    }
+
+    func toggleCursorPause() {
+        guard cursorEnabled else { return }
+        cursorPaused.toggle()
+        syncCursorControl()
+    }
+
+    /// Explicit user action only. Shows the system prompt at most once per session; afterwards
+    /// the user is sent to System Settings instead.
+    func requestAccessibility() {
+        if accessibilityRequested {
+            AccessibilityPermissionManager.openSystemSettings()
+        } else {
+            accessibilityRequested = true
+            AccessibilityPermissionManager.request()
+        }
+        refreshAccessibility(force: true)
+    }
+
+    func openAccessibilitySettings() {
+        AccessibilityPermissionManager.openSystemSettings()
+    }
+
+    func updateSettings(_ newSettings: AirTrackSettings) {
+        settings = newSettings.sanitized
+        pipeline.apply(settings)
+    }
+
+    /// Re-checks the permission (it can be revoked while running) at most once per second.
+    private func refreshAccessibility(force: Bool = false) {
+        let now = ProcessInfo.processInfo.systemUptime
+        guard force || now - lastAccessibilityCheck >= 1 else { return }
+        lastAccessibilityCheck = now
+        let granted = AccessibilityPermissionManager.isGranted
+        if granted != accessibilityGranted {
+            accessibilityGranted = granted
+            Log.permissions.info("Accessibility permission \(granted ? "granted" : "missing", privacy: .public)")
+            syncCursorControl()
+        }
+    }
+
+    /// The pipeline may move the cursor only when every condition holds. Any failure (camera
+    /// stopped, paused, disabled, permission missing) turns it off immediately.
+    private func syncCursorControl() {
+        let allowed = cursorEnabled && !cursorPaused && accessibilityGranted && cameraStatus == .running
+        pipeline.setCursorControl(allowed: allowed)
+        if !allowed { cursor = nil }
+    }
+
     private func apply(_ status: CameraStatus) {
         cameraStatus = status
         if status != .running {
@@ -110,6 +192,12 @@ final class AppModel {
             candidateCount = 0
             rejections = []
         }
+        syncCursorControl()
+    }
+
+    private func apply(_ newMetrics: TrackingMetrics) {
+        metrics = newMetrics
+        if cursorEnabled { refreshAccessibility() }
     }
 
     private func apply(_ result: TrackingResult) {
@@ -117,6 +205,7 @@ final class AppModel {
         hands = result.hands
         candidateCount = result.candidateCount
         rejections = result.rejections
+        cursor = result.cursor
         if !result.hands.isEmpty { hasSeenHand = true }
     }
 
@@ -125,6 +214,7 @@ final class AppModel {
         candidateCount = 0
         rejections = []
         hasSeenHand = false
+        cursor = nil
         metrics = TrackingMetrics()
         pipeline.reset()
     }

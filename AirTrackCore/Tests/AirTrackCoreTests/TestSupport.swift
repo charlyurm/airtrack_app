@@ -68,6 +68,15 @@ extension TestHands {
     }
 }
 
+extension TestHands {
+    /// Full valid open hand whose index tip sits exactly at `indexTip` (raw camera space).
+    static func pointing(at indexTip: Point2D, time: TimeInterval = 0, indexConfidence: Double = 0.9) -> HandState {
+        var hand = openHand(at: time, center: indexTip - openHandOffsets[.indexTip]!)
+        hand.landmarks[.indexTip] = HandLandmark(indexTip, confidence: indexConfidence)
+        return hand
+    }
+}
+
 /// Deterministic pseudo-random generator for reproducible "noisy landmark" tests.
 struct SeededGenerator: RandomNumberGenerator {
     private var state: UInt64

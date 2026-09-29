@@ -9,7 +9,7 @@ struct TrackingStatusView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("AirTrack").font(.title2.bold())
-                Text("PHASE 1.1 · Camera + Vision debug").font(.caption).foregroundStyle(.secondary)
+                Text("PHASE 2 · Cursor control debug").font(.caption).foregroundStyle(.secondary)
 
                 section("Estado") {
                     row("Camera", model.cameraStatus.label, color: cameraColor)
@@ -32,6 +32,8 @@ struct TrackingStatusView: View {
                         Text(message).font(.caption).foregroundStyle(.red)
                     }
                 }
+
+                cursorSection
 
                 permissionSection
 
@@ -93,6 +95,90 @@ struct TrackingStatusView: View {
                     .font(.caption).foregroundStyle(.secondary)
                 Button("Abrir Configuración del Sistema") { model.openCameraSettings() }
             }
+        }
+    }
+
+    // MARK: Cursor (PHASE 2)
+
+    private var cursorSection: some View {
+        section("Cursor") {
+            Toggle("Cursor Control", isOn: Binding(
+                get: { model.cursorEnabled },
+                set: { model.setCursorEnabled($0) }
+            ))
+            row("Cursor", cursorStateLabel, color: cursorStateColor)
+            row("Permission", model.accessibilityGranted ? "READY" : "REQUIRED",
+                color: model.accessibilityGranted ? .green : .orange)
+            if !model.accessibilityGranted {
+                Text("AirTrack necesita permiso de Accesibilidad para controlar el cursor y generar eventos de entrada.")
+                    .font(.caption)
+                HStack {
+                    Button(model.accessibilityRequested ? "Abrir Configuración" : "Conceder permiso") {
+                        model.requestAccessibility()
+                    }
+                    if model.accessibilityRequested {
+                        Text("Actívalo en Privacidad y seguridad → Accesibilidad.")
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            Button(model.cursorPaused ? "Reanudar (⌃⌥⌘A)" : "Pausar (⌃⌥⌘A)") { model.toggleCursorPause() }
+                .keyboardShortcut("a", modifiers: [.control, .option, .command])
+                .disabled(!model.cursorEnabled)
+            row("Primary hand", model.hands.isEmpty ? "—" : "1 de \(model.hands.count)")
+            row("Mapped cursor", model.cursor.map { String(format: "%.0f, %.0f pt", $0.screen.x, $0.screen.y) } ?? "—")
+            row("Active area", activeAreaLabel)
+            slider("Sensitivity", value: settingBinding(\.cursorSensitivity), range: CursorMapper.sensitivityRange, format: "%.2f×")
+            slider("Smoothing", value: settingBinding(\.cursorSmoothing), range: 0...0.9, format: "%.2f")
+            slider("Dead zone", value: settingBinding(\.cursorDeadZone), range: 0...0.02, format: "%.3f")
+            Text("Para soltar el cursor: saca la mano del cuadro, pulsa Pausar o apaga Cursor Control. Solo la mano 1 mueve el cursor. Pantalla: la principal.")
+                .font(.caption2).foregroundStyle(.secondary)
+        }
+    }
+
+    private var cursorStateLabel: String {
+        switch model.cursorState {
+        case .off: "OFF"
+        case .paused: "PAUSED"
+        case .waitingForPermission: "WAITING FOR PERMISSION"
+        case .waitingForHand: "WAITING FOR HAND"
+        case .active: "ACTIVE"
+        }
+    }
+
+    private var cursorStateColor: Color {
+        switch model.cursorState {
+        case .active: .green
+        case .off: .secondary
+        case .paused, .waitingForHand: .orange
+        case .waitingForPermission: .red
+        }
+    }
+
+    private var activeAreaLabel: String {
+        let area = model.settings.cursorMapper.validActiveArea
+        return String(format: "x %.2f–%.2f · y %.2f–%.2f", area.minX, area.maxX, area.minY, area.maxY)
+    }
+
+    private func settingBinding(_ keyPath: WritableKeyPath<AirTrackSettings, Double>) -> Binding<Double> {
+        Binding(
+            get: { model.settings[keyPath: keyPath] },
+            set: { newValue in
+                var settings = model.settings
+                settings[keyPath: keyPath] = newValue
+                model.updateSettings(settings)
+            }
+        )
+    }
+
+    private func slider(_ label: String, value: Binding<Double>, range: ClosedRange<Double>, format: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(label).font(.caption)
+                Spacer()
+                Text(String(format: format, value.wrappedValue)).font(.caption.monospaced())
+            }
+            Slider(value: value, in: range)
         }
     }
 

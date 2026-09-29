@@ -66,6 +66,35 @@ final class CursorMapperTests: XCTestCase {
         XCTAssertRectEqual(mapper.effectiveArea, CursorMapper.defaultActiveArea)
     }
 
+    // MARK: PHASE 2 — two-step mapping (active area, then sensitivity)
+
+    func testActiveAreaNormalizationIsNotClamped() {
+        let mapper = CursorMapper(mirrorHorizontally: false, activeArea: Rect2D(x: 0.25, y: 0.25, width: 0.5, height: 0.5))
+        XCTAssertPointEqual(mapper.normalizedInActiveArea(Point2D(x: 0.125, y: 0.875)), Point2D(x: -0.25, y: 1.25))
+    }
+
+    func testSensitivityScalesAroundTheCenterAndClamps() {
+        let mapper = CursorMapper(sensitivity: 2)
+        XCTAssertPointEqual(mapper.applyingSensitivity(Point2D(x: 0.5, y: 0.5)), Point2D(x: 0.5, y: 0.5))
+        XCTAssertPointEqual(mapper.applyingSensitivity(Point2D(x: 0.375, y: 0.625)), Point2D(x: 0.25, y: 0.75))
+        XCTAssertPointEqual(mapper.applyingSensitivity(Point2D(x: 0.1, y: 0.95)), Point2D(x: 0, y: 1))
+    }
+
+    func testTwoStepMappingEqualsShrinkingTheActiveArea() {
+        let mapper = CursorMapper(activeArea: Rect2D(x: 0.2, y: 0.1, width: 0.6, height: 0.7), sensitivity: 1.7)
+        for x in stride(from: 0.0, through: 1.0, by: 0.125) {
+            for y in stride(from: 0.0, through: 1.0, by: 0.125) {
+                let p = Point2D(x: x, y: y)
+                let viaArea = Rect2D.unit.clamp(mapper.effectiveArea.normalizedPosition(of: mapper.mirrored(p)))
+                XCTAssertPointEqual(mapper.map(p), viaArea, accuracy: 1e-9)
+            }
+        }
+    }
+
+    func testDefaultActiveAreaIs15To85Percent() {
+        XCTAssertRectEqual(CursorMapper.defaultActiveArea, Rect2D(x: 0.15, y: 0.15, width: 0.7, height: 0.7))
+    }
+
     func testCalibrationBuildsActiveAreaFromTwoCorners() {
         let area = ActiveAreaCalibration.activeArea(topLeft: Point2D(x: 0.7, y: 0.2), bottomRight: Point2D(x: 0.25, y: 0.8))
         XCTAssertRectEqual(area, Rect2D(x: 0.25, y: 0.2, width: 0.45, height: 0.6))

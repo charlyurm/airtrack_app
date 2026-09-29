@@ -47,6 +47,46 @@ final class CursorSmootherTests: XCTestCase {
         XCTAssertPointEqual(smoother.smooth(Point2D(x: 1, y: 1)), Point2D(x: 1, y: 1))
     }
 
+    func testStationaryInputStaysExactlyStill() {
+        var smoother = CursorSmoother(smoothing: 0.35)
+        let p = Point2D(x: 0.3, y: 0.7)
+        for _ in 0..<30 { XCTAssertEqual(smoother.smooth(p), p) }
+    }
+
+    func testStepResponseNeverOvershoots() {
+        var smoother = CursorSmoother(smoothing: 0.35)
+        _ = smoother.smooth(Point2D(x: 0, y: 1))
+        var previous = 0.0
+        for _ in 0..<40 {
+            let out = smoother.smooth(Point2D(x: 1, y: 0))
+            XCTAssertGreaterThanOrEqual(out.x, previous, "must approach monotonically")
+            XCTAssertLessThanOrEqual(out.x, 1, "must never pass the target")
+            XCTAssertGreaterThanOrEqual(out.y, 0)
+            previous = out.x
+        }
+    }
+
+    func testIntentionalMovementIsFollowedWithBoundedLag() {
+        // Constant-speed movement: the EMA lags by a fixed amount, it never falls further behind.
+        var smoother = CursorSmoother(smoothing: 0.35)
+        var lag = 0.0
+        for i in 0..<60 {
+            let target = Double(i) * 0.01
+            lag = target - smoother.smooth(Point2D(x: target, y: 0)).x
+        }
+        // Steady-state lag = step · alpha / (1 − alpha) = 0.01 · 0.35 / 0.65 ≈ 0.0054.
+        XCTAssertEqual(lag, 0.01 * 0.35 / 0.65, accuracy: 1e-6)
+    }
+
+    func testSameInputGivesSameOutput() {
+        var a = CursorSmoother(smoothing: 0.35)
+        var b = CursorSmoother(smoothing: 0.35)
+        for i in 0..<20 {
+            let p = Point2D(x: Double(i % 7) / 7, y: Double(i % 3) / 3)
+            XCTAssertEqual(a.smooth(p), b.smooth(p))
+        }
+    }
+
     func testSmoothingIsClampedSoTheCursorNeverFreezes() {
         var smoother = CursorSmoother(smoothing: 1.0)
         XCTAssertEqual(smoother.effectiveSmoothing, CursorSmoother.smoothingRange.upperBound)
