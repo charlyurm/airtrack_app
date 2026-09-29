@@ -70,11 +70,11 @@ public struct HandFeatures: Equatable, Sendable {
 
     public func state(of finger: Finger) -> FingerState { fingers[finger]?.state ?? .unknown }
 
-    public var extendedFingers: FingerSet { set(where: .extended) }
-    public var bentFingers: FingerSet { set(where: .bent) }
+    public var extendedFingers: FingerSet { fingers(in: .extended) }
+    public var bentFingers: FingerSet { fingers(in: .bent) }
     public var extendedCount: Int { extendedFingers.count }
 
-    private func set(where state: FingerState) -> FingerSet {
+    private func fingers(in state: FingerState) -> FingerSet {
         var result: FingerSet = []
         for finger in Finger.allCases where self.state(of: finger) == state { result.insert(FingerSet(finger)) }
         return result
