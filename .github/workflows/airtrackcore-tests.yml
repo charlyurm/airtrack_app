@@ -1,13 +1,15 @@
-name: AirTrackCore Tests
+name: AirTrack CI
 
 on:
   push:
     paths:
       - "AirTrackCore/**"
+      - "AirTrack/**"
       - ".github/workflows/airtrackcore-tests.yml"
   pull_request:
     paths:
       - "AirTrackCore/**"
+      - "AirTrack/**"
       - ".github/workflows/airtrackcore-tests.yml"
   workflow_dispatch:
 
@@ -39,3 +41,27 @@ jobs:
       - name: Build and test
         working-directory: AirTrackCore
         run: swift test
+
+  app:
+    name: xcodebuild AirTrack.app (macOS, compile only — no camera on CI)
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          xcrun --show-sdk-version
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project AirTrack/AirTrack.xcodeproj \
+            -scheme AirTrack \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            build 2>&1 | tee build.log
+      - name: Warnings summary
+        if: always()
+        run: |
+          grep -E "(warning|error):" build.log | grep -v "^ld: warning" | sort -u || echo "No warnings or errors"

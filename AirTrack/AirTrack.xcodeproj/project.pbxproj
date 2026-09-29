@@ -1,0 +1,276 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A7C0FFEE000000000000000A /* AirTrackCore in Frameworks */ = {isa = PBXBuildFile; productRef = A7C0FFEE000000000000000C /* AirTrackCore */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A7C0FFEE0000000000000005 /* AirTrack.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AirTrack.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A7C0FFEE0000000000000013 /* AirTrack.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AirTrack.entitlements; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		A7C0FFEE0000000000000004 /* AirTrack */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = AirTrack;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A7C0FFEE0000000000000008 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A7C0FFEE000000000000000A /* AirTrackCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A7C0FFEE0000000000000002 = {
+			isa = PBXGroup;
+			children = (
+				A7C0FFEE0000000000000004 /* AirTrack */,
+				A7C0FFEE0000000000000013 /* AirTrack.entitlements */,
+				A7C0FFEE0000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A7C0FFEE0000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A7C0FFEE0000000000000005 /* AirTrack.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A7C0FFEE0000000000000006 /* AirTrack */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A7C0FFEE0000000000000010 /* Build configuration list for PBXNativeTarget "AirTrack" */;
+			buildPhases = (
+				A7C0FFEE0000000000000007 /* Sources */,
+				A7C0FFEE0000000000000008 /* Frameworks */,
+				A7C0FFEE0000000000000009 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A7C0FFEE0000000000000004 /* AirTrack */,
+			);
+			name = AirTrack;
+			packageProductDependencies = (
+				A7C0FFEE000000000000000C /* AirTrackCore */,
+			);
+			productName = AirTrack;
+			productReference = A7C0FFEE0000000000000005 /* AirTrack.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A7C0FFEE0000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					A7C0FFEE0000000000000006 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = A7C0FFEE000000000000000D /* Build configuration list for PBXProject "AirTrack" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A7C0FFEE0000000000000002;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				A7C0FFEE000000000000000B /* XCLocalSwiftPackageReference "../AirTrackCore" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = A7C0FFEE0000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A7C0FFEE0000000000000006 /* AirTrack */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A7C0FFEE0000000000000009 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A7C0FFEE0000000000000007 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A7C0FFEE000000000000000E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		A7C0FFEE000000000000000F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		A7C0FFEE0000000000000011 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = AirTrack.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = AirTrack;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSCameraUsageDescription = "AirTrack necesita la cámara para detectar los movimientos de tu mano. Las imágenes se procesan solo en este Mac y nunca se guardan ni se envían.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.airtrack.AirTrack;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		A7C0FFEE0000000000000012 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = AirTrack.entitlements;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = AirTrack;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSCameraUsageDescription = "AirTrack necesita la cámara para detectar los movimientos de tu mano. Las imágenes se procesan solo en este Mac y nunca se guardan ni se envían.";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.airtrack.AirTrack;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A7C0FFEE000000000000000D /* Build configuration list for PBXProject "AirTrack" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A7C0FFEE000000000000000E /* Debug */,
+				A7C0FFEE000000000000000F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A7C0FFEE0000000000000010 /* Build configuration list for PBXNativeTarget "AirTrack" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A7C0FFEE0000000000000011 /* Debug */,
+				A7C0FFEE0000000000000012 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		A7C0FFEE000000000000000B /* XCLocalSwiftPackageReference "../AirTrackCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../AirTrackCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A7C0FFEE000000000000000C /* AirTrackCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A7C0FFEE000000000000000B /* XCLocalSwiftPackageReference "../AirTrackCore" */;
+			productName = AirTrackCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = A7C0FFEE0000000000000001 /* Project object */;
+}
