@@ -6,15 +6,26 @@ public struct AirTrackSettings: Equatable, Sendable, Codable {
     // Cursor (PHASE 2). All initial values are UNCALIBRATED; tune them on the real Mac.
     /// 1 = the active area maps exactly onto the screen; >1 = less hand travel per screen.
     public var cursorSensitivity: Double = 1.0
-    /// EMA weight of the previous position (0 = none, max 0.95). Kept moderate because the
-    /// dead zone already handles a still finger.
-    public var cursorSmoothing: Double = 0.35
+    /// Smoothing while the finger is still or slow: EMA weight of the previous position per
+    /// frame at 30 fps (0 = none, max 0.95). PHASE 2.1: time-based and reduced automatically
+    /// as the finger speeds up (see `cursorSpeedResponse`, AdaptiveCursorSmoother).
+    /// Phase 2 used 0.35 FIXED at every speed. With speed adaptation the rest value can be
+    /// higher (the Mac test found high smoothing more natural, only its lag was the problem):
+    /// 0.6 at rest ≈ 0.57 slow · 0.39 at 0.5 screens/s · 0.14 at 2.5 screens/s. UNCALIBRATED.
+    public var cursorSmoothing: Double = 0.6
+    /// PHASE 2.1: how much speed reduces smoothing (s per display-normalized unit). 0 = fixed
+    /// smoothing (time-based Phase 2 behavior). UNCALIBRATED.
+    public var cursorSpeedResponse: Double = 1.0
     /// Finger micro-movement ignored while still, in active-area units (0.003 ≈ 0.3 % of the
     /// active area ≈ 4 pt on a 1440-pt-wide screen at sensitivity 1).
     public var cursorDeadZone: Double = 0.003
     /// When the hand is (re)acquired the cursor starts where it already is and glides onto the
     /// finger's mapped position over this time instead of jumping. 0 = jump immediately.
     public var cursorReacquisitionBlend: TimeInterval = 0.2
+    /// PHASE 2.1: once a full hand has been acquired, keep following its index tip through
+    /// short dropouts and partial views near the frame edges (PointerTracker). Off = Phase 2
+    /// behavior (only a fully valid hand moves the cursor; any gap is an immediate loss).
+    public var cursorPeripheralTracking: Bool = true
     /// Reserved for PHASE 4 (scroll). Not used yet.
     public var scrollSensitivity: Double = 1.0
     /// Pinch start threshold, as a ratio of hand size (see HandScale).
@@ -44,6 +55,7 @@ public struct AirTrackSettings: Equatable, Sendable, Codable {
         let defaults = AirTrackSettings.default
         s.cursorSensitivity = Self.clamp(cursorSensitivity, CursorMapper.sensitivityRange, fallback: defaults.cursorSensitivity)
         s.cursorSmoothing = Self.clamp(cursorSmoothing, CursorSmoother.smoothingRange, fallback: defaults.cursorSmoothing)
+        s.cursorSpeedResponse = Self.clamp(cursorSpeedResponse, AdaptiveCursorSmoother.speedResponseRange, fallback: defaults.cursorSpeedResponse)
         s.cursorDeadZone = Self.clamp(cursorDeadZone, DeadZoneFilter.thresholdRange, fallback: defaults.cursorDeadZone)
         s.cursorReacquisitionBlend = Self.clamp(cursorReacquisitionBlend, Self.reacquisitionBlendRange, fallback: defaults.cursorReacquisitionBlend)
         s.doubleClickInterval = Self.clamp(doubleClickInterval, Self.doubleClickIntervalRange, fallback: defaults.doubleClickInterval)

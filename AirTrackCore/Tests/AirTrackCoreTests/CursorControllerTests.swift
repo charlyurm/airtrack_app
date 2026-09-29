@@ -267,7 +267,10 @@ final class CursorControllerTests: XCTestCase {
     func testDefaultCursorSettings() {
         let s = AirTrackSettings.default
         XCTAssertEqual(s.cursorSensitivity, 1)
-        XCTAssertEqual(s.cursorSmoothing, 0.35)
+        // PHASE 2.1: rest smoothing 0.35 → 0.6, now reduced automatically with speed.
+        XCTAssertEqual(s.cursorSmoothing, 0.6)
+        XCTAssertEqual(s.cursorSpeedResponse, 1)
+        XCTAssertTrue(s.cursorPeripheralTracking)
         XCTAssertEqual(s.cursorDeadZone, 0.003)
         XCTAssertEqual(s.cursorReacquisitionBlend, 0.2)
         XCTAssertTrue(s.mirrorCamera)

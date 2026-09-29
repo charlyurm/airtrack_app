@@ -2,9 +2,12 @@ import Foundation
 
 /// Exponential moving average: smoothed = previous * alpha + current * (1 - alpha).
 ///
-/// Per-frame (not per-second): the effective lag depends on the frame rate. Kept on purpose
-/// for now; time-based smoothing (same feel at 30/60/120 fps) is a planned improvement.
-/// alpha is capped below 1 so the cursor can never freeze.
+/// Per-frame (not per-second): the effective lag depends on the frame rate. alpha is capped
+/// below 1 so the cursor can never freeze.
+///
+/// PHASE 2.1: the cursor now uses AdaptiveCursorSmoother (time-based, velocity-aware), which
+/// equals this filter at 30 fps with speed response 0. This fixed EMA remains for
+/// GestureEngine (not wired yet) and as the reference behavior in tests.
 public struct CursorSmoother: Sendable {
     public static let smoothingRange: ClosedRange<Double> = 0.0...0.95
 
