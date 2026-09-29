@@ -141,6 +141,11 @@ final class AppModel {
         camera.stop()
     }
 
+    /// App termination: release any live gesture output (no scroll left open).
+    func shutdown() {
+        pipeline.shutdown()
+    }
+
     /// Refreshes the camera list and restarts (after an error, a disconnection or a new permission).
     func retry() async {
         selectedCameraID = nil

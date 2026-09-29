@@ -128,8 +128,8 @@ enum InteractionScenario {
     }
 
     @discardableResult
-    static func feed(_ engine: inout InteractionEngine, _ hand: HandState?, mode: PointerTrackingMode = .full, at t: TimeInterval) -> InteractionFrame {
-        engine.update(pointer: pointer(mode, hand: hand, at: t), trackedHand: mode.providesPointer ? hand : nil)
+    static func feed(_ engine: inout InteractionEngine, _ hand: HandState?, mode: PointerTrackingMode = .full, at t: TimeInterval, live: Bool = false) -> InteractionFrame {
+        engine.update(pointer: pointer(mode, hand: hand, at: t), trackedHand: mode.providesPointer ? hand : nil, emitsActions: live)
     }
 
     /// Hand in `pose` moving by `step` (image units per frame) from `start`, frames first..<last.
@@ -140,12 +140,21 @@ enum InteractionScenario {
         from start: Point2D = Point2D(x: 0.5, y: 0.4),
         step: Point2D,
         frames: Range<Int>,
-        scale: Double = 1
+        scale: Double = 1,
+        live: Bool = false
     ) -> [InteractionFrame] {
         frames.map { i in
             let t = Double(i) * dt
             let center = start + step * Double(i - frames.lowerBound)
-            return feed(&engine, TestPoses.hand(extended: extended, thumb: thumb, at: t, center: center, scale: scale), at: t)
+            return feed(&engine, TestPoses.hand(extended: extended, thumb: thumb, at: t, center: center, scale: scale), at: t, live: live)
+        }
+    }
+
+    /// All scroll actions of a run of frames.
+    static func scrolls(_ frames: [InteractionFrame]) -> [ScrollAction] {
+        frames.flatMap(\.actions).compactMap { action in
+            if case let .scroll(scroll) = action { return scroll }
+            return nil
         }
     }
 }

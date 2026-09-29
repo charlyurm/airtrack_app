@@ -26,8 +26,15 @@ public struct AirTrackSettings: Equatable, Sendable, Codable {
     /// short dropouts and partial views near the frame edges (PointerTracker). Off = Phase 2
     /// behavior (only a fully valid hand moves the cursor; any gap is an immediate loss).
     public var cursorPeripheralTracking: Bool = true
-    /// Reserved for PHASE 4 (scroll). Not used yet.
+    /// PHASE 3A-2: multiplier of the scroll response (content points per hand movement).
+    /// Not exposed in the UI yet: defaults first, configuration after physical validation.
     public var scrollSensitivity: Double = 1.0
+    /// PHASE 3A-2: two-finger / open-hand vertical scroll reaches macOS. Off = the interaction
+    /// engine only observes (3A-1 shadow mode) and the cursor behaves exactly like Phase 2.1.
+    public var scrollGesturesEnabled: Bool = true
+    /// PHASE 3A-2: flips the sign the macOS adapter uses. The Core always means "content
+    /// follows the hand"; whether synthetic events need flipping is settled on the real Mac.
+    public var scrollDirectionInverted: Bool = false
     /// Pinch start threshold, as a ratio of hand size (see HandScale).
     /// Initial, UNCALIBRATED value — validate with the real camera.
     public var pinchThreshold: Double = 0.25
@@ -49,6 +56,7 @@ public struct AirTrackSettings: Equatable, Sendable, Codable {
 
     public static let doubleClickIntervalRange: ClosedRange<TimeInterval> = 0.15...1.0
     public static let reacquisitionBlendRange: ClosedRange<TimeInterval> = 0...1.0
+    public static let scrollSensitivityRange: ClosedRange<Double> = 0.25...4.0
 
     public var sanitized: AirTrackSettings {
         var s = self
@@ -58,6 +66,7 @@ public struct AirTrackSettings: Equatable, Sendable, Codable {
         s.cursorSpeedResponse = Self.clamp(cursorSpeedResponse, AdaptiveCursorSmoother.speedResponseRange, fallback: defaults.cursorSpeedResponse)
         s.cursorDeadZone = Self.clamp(cursorDeadZone, DeadZoneFilter.thresholdRange, fallback: defaults.cursorDeadZone)
         s.cursorReacquisitionBlend = Self.clamp(cursorReacquisitionBlend, Self.reacquisitionBlendRange, fallback: defaults.cursorReacquisitionBlend)
+        s.scrollSensitivity = Self.clamp(scrollSensitivity, Self.scrollSensitivityRange, fallback: defaults.scrollSensitivity)
         s.doubleClickInterval = Self.clamp(doubleClickInterval, Self.doubleClickIntervalRange, fallback: defaults.doubleClickInterval)
         if !activeArea.isValid { s.activeArea = defaults.activeArea }
         let pinch = pinchConfiguration.sanitized

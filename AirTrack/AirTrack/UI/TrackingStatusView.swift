@@ -9,7 +9,7 @@ struct TrackingStatusView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("AirTrack").font(.title2.bold())
-                Text("PHASE 2.1 · Cursor control debug").font(.caption).foregroundStyle(.secondary)
+                Text("PHASE 3A · Cursor + scroll debug").font(.caption).foregroundStyle(.secondary)
 
                 section("Estado") {
                     row("Camera", model.cameraStatus.label, color: cameraColor)
@@ -209,9 +209,23 @@ struct TrackingStatusView: View {
             row("Lifecycle", i.lifecycle.rawValue.uppercased())
             row("Cursor policy", i.cursorPolicy == .frozen ? "FROZEN" : "FOLLOW",
                 color: i.cursorPolicy == .frozen ? .orange : .primary)
-            Text("E = extendido · B = doblado · ? = incierto. Escala y velocidad en tamaños de mano.")
+            row("Scroll", scrollStateLabel(i), color: i.scrollState == .idle ? .secondary : .green)
+            row("Scroll speed", String(format: "%.0f pt/s", i.scrollSpeed))
+            row("Scroll delta", "\(i.scrollDelta) pt")
+            Toggle("Scroll con gestos", isOn: settingBinding(\.scrollGesturesEnabled))
+            Toggle("Invertir dirección del scroll", isOn: settingBinding(\.scrollDirectionInverted))
+            Text("E = extendido · B = doblado · ? = incierto. Escala y velocidad en tamaños de mano. Scroll: ☝️🖕 o 🖐️ moviendo en vertical; el cursor se congela mientras dura. Sin «Scroll con gestos» (o sin Cursor Control) solo se observa: no se envía nada.")
                 .font(.caption2).foregroundStyle(.secondary)
         }
+    }
+
+    private func scrollStateLabel(_ i: InteractionFrame) -> String {
+        let state = switch i.scrollState {
+        case .idle: "IDLE"
+        case .scrolling: "SCROLLING"
+        case .momentum: "INERTIA"
+        }
+        return i.scrollState == .idle ? state : state + (i.liveOutput ? " · LIVE" : " · SHADOW")
     }
 
     private func poseLabel(_ pose: HandPose) -> String {

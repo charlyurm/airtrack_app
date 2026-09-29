@@ -76,6 +76,9 @@ final class HandTrackingPipeline: @unchecked Sendable {
     private var lastHandCount = 0
     private var lastPointerMode: PointerTrackingMode = .lost
     private var consecutiveErrors = 0
+    /// PHASE 3A-2 settings mirrored onto the Vision queue.
+    private var scrollGesturesEnabled = AirTrackSettings.default.scrollGesturesEnabled
+    private var scrollDirectionInverted = AirTrackSettings.default.scrollDirectionInverted
 
     /// Called on the camera's video queue.
     func submit(_ frame: CameraFrame) {
@@ -101,6 +104,18 @@ final class HandTrackingPipeline: @unchecked Sendable {
             return cursorAllowed != allowed
         }
         if changed { Log.tracking.info("Cursor control \(allowed ? "active" : "inactive", privacy: .public)") }
+        // Pause, cursor control off, permission lost, camera stopped: close any live gesture
+        // output right away (the camera may already be stopped, so no frame will do it).
+        if changed, !allowed {
+            visionQueue.async { [self] in postInteraction(interactionEngine.cancel()) }
+        }
+    }
+
+    /// App termination: close any live gesture output before the process exits. Waits for the
+    /// Vision queue (at most one frame of work); called once, from applicationWillTerminate.
+    func shutdown() {
+        lock.withLock { cursorAllowed = false }
+        visionQueue.sync { [self] in postInteraction(interactionEngine.cancel()) }
     }
 
     func apply(_ settings: AirTrackSettings) {
@@ -108,6 +123,9 @@ final class HandTrackingPipeline: @unchecked Sendable {
             cursorController.apply(settings)
             pointerTracker.apply(settings)
             interactionEngine.apply(settings)
+            scrollGesturesEnabled = settings.scrollGesturesEnabled
+            scrollDirectionInverted = settings.scrollDirectionInverted
+            if !settings.scrollGesturesEnabled { postInteraction(interactionEngine.cancel()) }
         }
     }
 
@@ -126,7 +144,7 @@ final class HandTrackingPipeline: @unchecked Sendable {
         visionQueue.async { [self] in
             pointerTracker.reset()
             cursorController.reset()
-            interactionEngine.reset()
+            postInteraction(interactionEngine.reset())
             if lastHandCount > 0 { Log.tracking.info("Tracking reset") }
             lastHandCount = 0
             lastPointerMode = .lost
@@ -180,10 +198,17 @@ final class HandTrackingPipeline: @unchecked Sendable {
             Log.tracking.debug("Pointer \(tracked.pointer.mode.rawValue, privacy: .public)")
             lastPointerMode = tracked.pointer.mode
         }
-        // PHASE 3A-1: shadow mode. The interaction engine only observes; the cursor path below
-        // is exactly Phase 2.1 and no gesture event is posted.
-        let interaction = interactionEngine.update(pointer: tracked.pointer, trackedHand: tracked.trackedHand)
-        let cursor = updateCursor(pointer: tracked.pointer)
+        // PHASE 3A: the interaction engine sees every frame. Its output reaches macOS only while
+        // cursor control is allowed and scroll gestures are enabled; otherwise it only observes
+        // (3A-1 shadow mode) and the cursor path is exactly Phase 2.1.
+        let live = lock.withLock { cursorAllowed } && scrollGesturesEnabled
+        let interaction = interactionEngine.update(pointer: tracked.pointer, trackedHand: tracked.trackedHand, emitsActions: live)
+        // Cursor freeze is a policy ABOVE CursorController (never modified): while a gesture owns
+        // the hand the controller is not fed and is reset, so the cursor returns afterwards with
+        // the existing Phase 2.1 reacquisition glide from wherever the cursor is.
+        let frozen = live && interaction.cursorPolicy == .frozen
+        let cursor = updateCursor(pointer: tracked.pointer, frozen: frozen)
+        postInteraction(interaction.actions)
         onResult?(TrackingResult(
             hands: hands,
             candidateCount: candidates.count,
@@ -208,8 +233,8 @@ final class HandTrackingPipeline: @unchecked Sendable {
     }
 
     /// visionQueue. Moves the system cursor only for a trusted pointer while allowed.
-    private func updateCursor(pointer: PointerObservation) -> CursorUpdate? {
-        guard lock.withLock({ cursorAllowed }) else {
+    private func updateCursor(pointer: PointerObservation, frozen: Bool) -> CursorUpdate? {
+        guard lock.withLock({ cursorAllowed }), !frozen else {
             cursorController.reset()
             return nil
         }
@@ -226,5 +251,12 @@ final class HandTrackingPipeline: @unchecked Sendable {
             events.moveCursor(to: update.screen)
         }
         return update
+    }
+
+    /// visionQueue. Posts gesture actions. The engine only produces them while output is live,
+    /// plus the closing phases when it is switched off, which are always safe to post.
+    private func postInteraction(_ actions: [InteractionAction]) {
+        guard !actions.isEmpty else { return }
+        events.post(actions, invertScroll: scrollDirectionInverted)
     }
 }

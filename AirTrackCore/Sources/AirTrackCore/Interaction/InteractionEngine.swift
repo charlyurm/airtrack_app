@@ -13,6 +13,7 @@ public struct InteractionConfiguration: Equatable, Sendable {
     public var features = HandFeatureConfiguration()
     public var pose = PoseConfiguration()
     public var scroll = ScrollRecognizerConfiguration()
+    public var scrollOutput = ScrollConfiguration()
     public var arbiter = ArbiterConfiguration()
     /// A stable candidate of a cursor-freezing family freezes the cursor after this long,
     /// before it commits: freezing earlier makes pointing sticky, later lets the cursor drift
@@ -44,13 +45,20 @@ public struct InteractionFrame: Equatable, Sendable {
     /// Palm speed in hand scales per second, and the axis of the recent motion.
     public var handSpeed: Double
     public var axis: DominantAxis
+    /// PHASE 3A-2: scroll output state, content speed (points/s), last whole step, and whether
+    /// the current scroll reaches macOS (live) or is only observed (shadow).
+    public var scrollState: ScrollController.State
+    public var scrollSpeed: Double
+    public var scrollDelta: Int
+    public var liveOutput: Bool
     public var actions: [InteractionAction]
 
     public static func idle(at timestamp: TimeInterval) -> InteractionFrame {
         InteractionFrame(
             timestamp: timestamp, trackingMode: .lost, availability: .lost, features: nil,
             pose: .unknown, rawPose: .unknown, candidate: nil, intent: nil, lifecycle: .idle,
-            released: nil, ambiguous: false, cursorPolicy: .follow, handSpeed: 0, axis: .none, actions: []
+            released: nil, ambiguous: false, cursorPolicy: .follow, handSpeed: 0, axis: .none,
+            scrollState: .idle, scrollSpeed: 0, scrollDelta: 0, liveOutput: false, actions: []
         )
     }
 }
@@ -61,13 +69,19 @@ public struct InteractionFrame: Equatable, Sendable {
 /// without a hand, so time-based output can advance). It never reads the clock and never
 /// touches macOS: the pipeline posts whatever `actions` it returns.
 ///
-/// PHASE 3A-1 (shadow): recognition and arbitration only; `actions` is always empty and the
-/// cursor policy is advisory (the pipeline ignores it).
+/// Output: `emitsActions` false (default) = shadow mode, exactly PHASE 3A-1: recognition and
+/// arbitration only, no actions, cursor policy advisory. `emitsActions` true (PHASE 3A-2) = a
+/// scroll committed while live produces `.scroll` actions and the cursor policy is meant to be
+/// applied. A live scroll whose output is switched off is closed immediately (ended phase);
+/// a scroll committed in shadow stays shadow until it is released.
 public struct InteractionEngine: Sendable {
     public var configuration: InteractionConfiguration
     public private(set) var history: FeatureHistory
     public private(set) var poseClassifier: PoseClassifier
     public private(set) var arbiter: IntentArbiter
+    public private(set) var scroll: ScrollController
+    /// The current scroll session reaches macOS.
+    public private(set) var liveSession = false
     private let recognizers: [any GestureRecognizer]
     private var lastTimestamp: TimeInterval?
 
@@ -76,17 +90,30 @@ public struct InteractionEngine: Sendable {
         self.history = FeatureHistory()
         self.poseClassifier = PoseClassifier(configuration: configuration.pose)
         self.arbiter = IntentArbiter(configuration: configuration.arbiter)
+        self.scroll = ScrollController(configuration: configuration.scrollOutput)
         self.recognizers = [ScrollRecognizer(configuration: configuration.scroll)]
     }
 
     public mutating func apply(_ settings: AirTrackSettings) {
-        configuration.mirrored = settings.mirrorCamera
+        let s = settings.sanitized
+        configuration.mirrored = s.mirrorCamera
+        scroll.sensitivity = s.scrollSensitivity
+    }
+
+    /// Poses that start a new interaction and therefore stop inertia (a trackpad stops
+    /// momentum when touched again). Pointing does not: the cursor may move while it coasts.
+    static func stopsMomentum(_ pose: HandPose) -> Bool {
+        switch pose {
+        case .twoFinger, .openHand, .fourFinger, .pinch: true
+        case .pointing, .unknown: false
+        }
     }
 
     /// - Parameters:
     ///   - pointer: PointerTracker's decision for this frame (tracking mode, timestamp).
     ///   - trackedHand: the hand PointerTracker followed this frame (nil in HOLD / LOST).
-    public mutating func update(pointer: PointerObservation, trackedHand: HandState?) -> InteractionFrame {
+    ///   - emitsActions: output allowed (cursor control active and scroll gestures enabled).
+    public mutating func update(pointer: PointerObservation, trackedHand: HandState?, emitsActions: Bool = false) -> InteractionFrame {
         let now = pointer.timestamp
         // A frame that is not newer than the previous one carries nothing new.
         let isFresh = now.isFinite && (lastTimestamp.map { now > $0 } ?? true)
@@ -127,24 +154,63 @@ public struct InteractionEngine: Sendable {
         }
 
         let decision = arbiter.update(candidates: candidates, availability: availability)
-        if decision.lifecycle == .releasing { arbiter.finishReleasing() }
+        var output: [ScrollAction] = []
 
-        return makeFrame(now: now, pointer: pointer, availability: availability, features: features, decision: decision, actions: [])
+        // Output switched off (pause, permission, cursor control): close anything live now.
+        if !emitsActions {
+            output += scroll.cancel()
+            liveSession = false
+        }
+        // A new interaction stops inertia.
+        if scroll.state == .momentum,
+           decision.candidate != nil || decision.committed || Self.stopsMomentum(poseClassifier.stablePose) {
+            output += scroll.cancelMomentum()
+        }
+
+        if decision.committed {
+            output += scroll.cancelMomentum()
+            liveSession = emitsActions
+            if liveSession {
+                let step = history.lastStep().map { (dy: $0.motion.dy, dt: $0.dt) }
+                output.append(scroll.begin(step: step))
+            }
+        } else if let reason = decision.released {
+            if liveSession {
+                // Inertia only from fresh motion: never after LOST (stale) or a cancellation.
+                let momentum = reason == .gestureEnded || reason == .trackingDegraded
+                output += scroll.end(allowMomentum: momentum, at: now)
+            }
+            liveSession = false
+        } else if decision.owner != nil, liveSession, decision.held, let step = history.lastStep() {
+            // Axis locked: only the vertical component scrolls.
+            if let action = scroll.update(dy: step.motion.dy, dt: step.dt) { output.append(action) }
+        } else if scroll.state == .momentum, emitsActions {
+            if let action = scroll.tick(at: now) { output.append(action) }
+        }
+
+        if arbiter.lifecycle == .releasing, scroll.state != .momentum { arbiter.finishReleasing() }
+
+        return makeFrame(now: now, pointer: pointer, availability: availability, features: features,
+                         decision: decision, emitsActions: emitsActions, actions: output.map(InteractionAction.scroll))
     }
 
-    /// Pause, cursor control off, permission lost, camera stopped, shutdown: ends any gesture.
-    /// Returns the actions that close live output (none in 3A-1).
+    /// Pause, cursor control off, permission lost, camera stopped, shutdown: ends any gesture
+    /// and returns the actions that close live output (an open scroll or inertia).
     public mutating func cancel() -> [InteractionAction] {
+        let closing = scroll.cancel()
+        liveSession = false
         arbiter.cancelAll()
-        return []
+        return closing.map(InteractionAction.scroll)
     }
 
-    /// Forget everything (camera restarted).
-    public mutating func reset() {
-        arbiter.cancelAll()
+    /// Forget everything (camera restarted). Returns the closing actions, like `cancel`.
+    @discardableResult
+    public mutating func reset() -> [InteractionAction] {
+        let closing = cancel()
         poseClassifier.reset()
         history.clear()
         lastTimestamp = nil
+        return closing
     }
 
     func cursorPolicy(for decision: IntentArbiter.Decision, now: TimeInterval) -> CursorPolicy {
@@ -156,7 +222,7 @@ public struct InteractionEngine: Sendable {
         return .follow
     }
 
-    private func makeFrame(now: TimeInterval, pointer: PointerObservation, availability: FeatureAvailability, features: HandFeatures?, decision: IntentArbiter.Decision, actions: [InteractionAction]) -> InteractionFrame {
+    private func makeFrame(now: TimeInterval, pointer: PointerObservation, availability: FeatureAvailability, features: HandFeatures?, decision: IntentArbiter.Decision, emitsActions: Bool, actions: [InteractionAction]) -> InteractionFrame {
         let velocity = availability == .available ? history.velocity() : .zero
         let recent = availability == .available ? history.displacement(since: now - 0.2) : .zero
         return InteractionFrame(
@@ -168,12 +234,17 @@ public struct InteractionEngine: Sendable {
             rawPose: poseClassifier.rawPose,
             candidate: decision.candidate,
             intent: decision.owner,
-            lifecycle: decision.lifecycle,
+            // Inertia still running = the released gesture is still RELEASING.
+            lifecycle: scroll.state == .momentum ? .releasing : decision.lifecycle,
             released: decision.released,
             ambiguous: decision.ambiguous,
             cursorPolicy: cursorPolicy(for: decision, now: now),
             handSpeed: velocity.magnitude,
             axis: DominantAxis.of(recent, minimumMagnitude: configuration.scroll.minimumAxisMotion, ratio: configuration.scroll.axisRatio),
+            scrollState: scroll.state,
+            scrollSpeed: scroll.pointsPerSecond,
+            scrollDelta: scroll.lastDelta,
+            liveOutput: liveSession || (scroll.state == .momentum && emitsActions),
             actions: actions
         )
     }

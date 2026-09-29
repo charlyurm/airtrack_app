@@ -10,14 +10,22 @@ struct AirTrackApp: App {
         WindowGroup("AirTrack") {
             ContentView(model: model)
                 .frame(minWidth: 960, minHeight: 600)
+                .onAppear { appDelegate.model = model }
         }
     }
 }
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    /// Set by the scene so termination can close any live gesture output.
+    weak var model: AppModel?
+
     /// Closing the debug window quits the app, so the camera is never left running in the background.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        model?.shutdown()
     }
 }
