@@ -66,7 +66,7 @@ Lógica pura (solo Foundation). La app lo consume como paquete local
 
 ```bash
 cd AirTrackCore
-swift test          # esperado: Executed 240 tests, with 0 failures
+swift test          # esperado: Executed 353 tests, with 0 failures
 ```
 
 ## F. Abrir el proyecto

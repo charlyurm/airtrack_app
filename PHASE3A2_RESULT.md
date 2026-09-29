@@ -168,3 +168,42 @@ una página larga (Safari o Chrome) y en Finder.
 Qué reportar: la dirección (¿necesitaste "Invertir"?), la velocidad lenta/media/rápida
 (corta, bien o larga), la inercia (ausente, bien o excesiva), el retorno del cursor, falsos
 positivos y en qué apps lo probaste.
+
+## 8. Fix tras la primera validación física (`1ba88f5`)
+
+**Resultado físico reportado:** cursor muy bien. Scroll inestable: 🖐️ hacia abajo fallaba a
+menudo (se atascaba o se volvía loco); ☝️🖕 solo funcionaba muy despacio, se cortaba, el cursor
+se quedaba congelado y TWO_FINGER desaparecía.
+
+**Causas en el código** (todas en la capa de interacción; Phase 2.1 no se tocó):
+
+1. **Mantenimiento frame a frame.** Un scroll confirmado exigía índice y medio EXTENDED en cada
+   frame. Bastaban 2 frames (66 ms) de un dedo en UNKNOWN (blur o perspectiva al mover la mano)
+   para liberarlo, y luego se volvía a confirmar. Eso explica el "empieza, se corta, empieza".
+2. **Cualquier frame PARTIAL/INDEX liberaba el scroll al instante y ponía la pose en UNKNOWN.**
+   Al bajar la mano, la muñeca y los nudillos inferiores salen de la imagen antes que nada, de ahí
+   la asimetría abajo/arriba. No era un problema de signo: la matemática es simétrica (test).
+3. **Movimiento medido con el centro de la palma = media de los nudillos visibles en cada frame**,
+   y escala = el segmento más largo visible. Un nudillo que entra y sale del frame desplazaba ese
+   centro, generando saltos falsos en sentido contrario ("se vuelve loco").
+
+**Corrección:**
+
+- **Inicio sin cambios** (precisión): tracking FULL, pose estable estricta y recorrido vertical.
+- **Mantenimiento por evidencia:** `supported` / `uncertain` / `contradicted`.
+  - La incertidumbre mantiene el scroll en SUSPENDED, sin deltas y sin extrapolar, durante una
+    gracia **basada en tiempo de 0.25 s**.
+  - Una pose estable claramente distinta (pointing, pinch…) lo termina en ~2 frames.
+  - LOST lo termina al instante.
+- **PARTIAL/INDEX con features medibles mantiene un scroll confirmado** (nunca inicia uno). La vista
+  parcial puede usar la escala mediana reciente de la misma mano.
+- **Movimiento robusto:** media del desplazamiento de los nudillos presentes en ambos frames,
+  normalizada por la escala mediana. Un paso > 20 escalas/s se descarta como fallo de detección.
+- **Inercia solo tras un final limpio y reciente**, nunca tras la gracia ni tras LOST.
+- **Panel:** Features (AVAILABLE/LIMITED/GAP/LOST), Mantenimiento y Vel. vertical.
+
+**Tests:** 353/353 en macOS y Linux (CI run 36635115158). `ScrollContinuityTests`, nuevo, con
+14 tests; `IntentArbiterTests` reescrito para la gracia temporal. `xcodebuild`:
+`** BUILD SUCCEEDED **`, único warning AppIntents.
+
+**Estado:** READY FOR RE-TEST (PENDING USER VALIDATION).

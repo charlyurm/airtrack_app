@@ -7,7 +7,7 @@ cd AirTrackCore
 swift test
 ```
 
-Total: **334 tests** en 25 suites (85 hasta PHASE 1 + 47 de PHASE 1.1 + 44 de PHASE 2 + 53 de PHASE 2.1 + 11 del hotfix de Accesibilidad + 58 de PHASE 3A-1 + 36 de PHASE 3A-2). Detalle de 3A en `PHASE3A1_RESULT.md` §3 y `PHASE3A2_RESULT.md` §3.
+Total: **353 tests** en 26 suites (incluye `ScrollContinuityTests`, 14, del fix de scroll) (85 hasta PHASE 1 + 47 de PHASE 1.1 + 44 de PHASE 2 + 53 de PHASE 2.1 + 11 del hotfix de Accesibilidad + 58 de PHASE 3A-1 + 36 de PHASE 3A-2). Detalle de 3A en `PHASE3A1_RESULT.md` §3 y `PHASE3A2_RESULT.md` §3.
 
 | Suite | Tests | Cubre |
 |---|---|---|
@@ -86,6 +86,7 @@ real de tests y builds es la del CI.
 | `7d234e1` (hotfix Accesibilidad) | 240/240 | 240/240 | Build OK. Único warning: AppIntents |
 | `03134e5` (3A-1) | 298/298 | verde | Build OK. Único warning: AppIntents |
 | `a6a77a6` (3A-2) | 334/334, 0 failures | 334/334, 0 failures | `** BUILD SUCCEEDED **`. Único warning: AppIntents (benigno) |
+| `1ba88f5` (fix scroll 3A) | 353/353, 0 failures | 353/353, 0 failures | `** BUILD SUCCEEDED **`. Único warning: AppIntents (benigno) |
 
 ## Validación manual — DEFERRED TO LOCAL MAC VALIDATION
 
