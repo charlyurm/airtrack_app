@@ -13,8 +13,12 @@ final class AppModel {
     var cameras: [CameraDevice] = []
     var selectedCameraID: String?
     var mirrorPreview = true
-    /// Latest result from Vision (tracked or not). nil when the camera is not delivering.
-    var hand: HandState?
+    /// Validated hands from the latest processed frame, primary first (HandOrdering). Empty when
+    /// no valid hand is visible: never the previous frame's landmarks.
+    var hands: [HandState] = []
+    /// Raw Vision observations and rejection reasons of the latest frame (diagnostics).
+    var candidateCount = 0
+    var rejections: [HandRejectionReason] = []
     var metrics = TrackingMetrics()
     /// Whether a hand has been seen since the camera started (distinguishes LOST from NO HAND).
     private(set) var hasSeenHand = false
@@ -24,13 +28,16 @@ final class AppModel {
 
     var session: AVCaptureSession { camera.session }
 
+    /// The hand later phases will use.
+    var primaryHand: HandState? { hands.first }
+
     var trackingLabel: String {
         guard cameraStatus == .running else { return "—" }
-        if hand?.isTracked == true { return "HAND DETECTED" }
+        if !hands.isEmpty { return "HAND DETECTED" }
         return hasSeenHand ? "LOST" : "NO HAND"
     }
 
-    var handCount: Int { hand?.isTracked == true ? 1 : 0 }
+    var handCount: Int { hands.count }
 
     init() {
         let camera = CameraManager()
@@ -44,9 +51,9 @@ final class AppModel {
             guard let self else { return }
             Self.deliver { self.apply(status) }
         }
-        pipeline.onHand = { [weak self] hand in
+        pipeline.onResult = { [weak self] result in
             guard let self else { return }
-            Self.deliver { self.apply(hand) }
+            Self.deliver { self.apply(result) }
         }
         pipeline.onMetrics = { [weak self] metrics in
             guard let self else { return }
@@ -99,18 +106,24 @@ final class AppModel {
     private func apply(_ status: CameraStatus) {
         cameraStatus = status
         if status != .running {
-            hand = nil
+            hands = []
+            candidateCount = 0
+            rejections = []
         }
     }
 
-    private func apply(_ newHand: HandState) {
+    private func apply(_ result: TrackingResult) {
         guard cameraStatus == .running else { return }
-        hand = newHand
-        if newHand.isTracked { hasSeenHand = true }
+        hands = result.hands
+        candidateCount = result.candidateCount
+        rejections = result.rejections
+        if !result.hands.isEmpty { hasSeenHand = true }
     }
 
     private func resetTracking() {
-        hand = nil
+        hands = []
+        candidateCount = 0
+        rejections = []
         hasSeenHand = false
         metrics = TrackingMetrics()
         pipeline.reset()

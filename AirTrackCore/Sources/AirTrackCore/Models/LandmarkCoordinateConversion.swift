@@ -23,13 +23,21 @@ public enum LandmarkCoordinateConversion {
     public static func handState(
         fromBottomLeftOrigin points: [HandJoint: BottomLeftLandmark],
         timestamp: TimeInterval,
-        imageAspectRatio: Double
+        imageAspectRatio: Double,
+        chirality: HandChirality = .unknown,
+        confidence: Double = 1
     ) -> HandState {
         var landmarks: [HandJoint: HandLandmark] = [:]
         for (joint, point) in points
         where point.confidence > 0 && point.confidence.isFinite && point.x.isFinite && point.y.isFinite {
             landmarks[joint] = HandLandmark(Point2D(x: point.x, y: 1 - point.y), confidence: point.confidence)
         }
-        return HandState(timestamp: timestamp, landmarks: landmarks, imageAspectRatio: imageAspectRatio)
+        return HandState(
+            timestamp: timestamp,
+            landmarks: landmarks,
+            imageAspectRatio: imageAspectRatio,
+            chirality: chirality,
+            confidence: confidence
+        )
     }
 }

@@ -15,11 +15,23 @@ public struct HandState: Equatable, Sendable {
     /// Width / height of the source image. Normalized x and y units differ on
     /// non-square images, so distances must be aspect-corrected.
     public var imageAspectRatio: Double
+    /// As reported by the provider; not validated by AirTrack.
+    public var chirality: HandChirality
+    /// Provider's confidence (0…1) that this observation is a hand at all.
+    public var confidence: Double
 
-    public init(timestamp: TimeInterval, landmarks: [HandJoint: HandLandmark] = [:], imageAspectRatio: Double = 1) {
+    public init(
+        timestamp: TimeInterval,
+        landmarks: [HandJoint: HandLandmark] = [:],
+        imageAspectRatio: Double = 1,
+        chirality: HandChirality = .unknown,
+        confidence: Double = 1
+    ) {
         self.timestamp = timestamp
         self.landmarks = landmarks
         self.imageAspectRatio = imageAspectRatio
+        self.chirality = chirality
+        self.confidence = confidence
     }
 
     public static func untracked(at timestamp: TimeInterval) -> HandState {

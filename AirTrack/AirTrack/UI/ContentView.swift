@@ -23,7 +23,10 @@ private struct PreviewPane: View {
     var body: some View {
         ZStack {
             Color.black
-            CameraPreviewView(session: model.session, hand: model.hand, mirrored: model.mirrorPreview)
+            // Preview and overlay share this exact frame; the overlay recomputes the preview's
+            // letterboxed image rect from the frame size and the image aspect ratio.
+            CameraPreviewView(session: model.session, mirrored: model.mirrorPreview)
+            HandDebugOverlay(hands: model.hands, mirrored: model.mirrorPreview)
             if model.cameraStatus != .running {
                 Text(placeholder)
                     .font(.headline)

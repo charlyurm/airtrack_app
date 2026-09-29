@@ -34,6 +34,40 @@ enum TestHands {
     }
 }
 
+extension TestHands {
+    /// Open hand, fingers pointing UP, in HandState space (top-left origin, y down), all 21
+    /// joints. At scale 1 the hand spans ~0.26 of the image height; wrist→indexMCP ≈ 0.13.
+    static let openHandOffsets: [HandJoint: Point2D] = [
+        .wrist: Point2D(x: 0, y: 0.15),
+        .thumbCMC: Point2D(x: -0.05, y: 0.10), .thumbMP: Point2D(x: -0.08, y: 0.06),
+        .thumbIP: Point2D(x: -0.10, y: 0.03), .thumbTip: Point2D(x: -0.12, y: 0.00),
+        .indexMCP: Point2D(x: -0.03, y: 0.02), .indexPIP: Point2D(x: -0.035, y: -0.03),
+        .indexDIP: Point2D(x: -0.04, y: -0.06), .indexTip: Point2D(x: -0.045, y: -0.09),
+        .middleMCP: Point2D(x: 0.0, y: 0.015), .middlePIP: Point2D(x: 0.0, y: -0.04),
+        .middleDIP: Point2D(x: 0.0, y: -0.075), .middleTip: Point2D(x: 0.0, y: -0.11),
+        .ringMCP: Point2D(x: 0.03, y: 0.02), .ringPIP: Point2D(x: 0.035, y: -0.03),
+        .ringDIP: Point2D(x: 0.04, y: -0.06), .ringTip: Point2D(x: 0.045, y: -0.085),
+        .pinkyMCP: Point2D(x: 0.055, y: 0.035), .pinkyPIP: Point2D(x: 0.065, y: -0.005),
+        .pinkyDIP: Point2D(x: 0.072, y: -0.03), .pinkyTip: Point2D(x: 0.08, y: -0.05),
+    ]
+
+    static func openHand(
+        at time: TimeInterval = 0,
+        center: Point2D = Point2D(x: 0.5, y: 0.5),
+        scale: Double = 1,
+        jointConfidence: Double = 0.9,
+        handConfidence: Double = 0.95,
+        chirality: HandChirality = .unknown,
+        omit: Set<HandJoint> = []
+    ) -> HandState {
+        var landmarks: [HandJoint: HandLandmark] = [:]
+        for (joint, offset) in openHandOffsets where !omit.contains(joint) {
+            landmarks[joint] = HandLandmark(center + offset * scale, confidence: jointConfidence)
+        }
+        return HandState(timestamp: time, landmarks: landmarks, imageAspectRatio: 1, chirality: chirality, confidence: handConfidence)
+    }
+}
+
 /// Deterministic pseudo-random generator for reproducible "noisy landmark" tests.
 struct SeededGenerator: RandomNumberGenerator {
     private var state: UInt64
