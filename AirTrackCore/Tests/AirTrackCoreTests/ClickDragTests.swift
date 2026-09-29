@@ -218,7 +218,7 @@ final class ClickDragTests: XCTestCase {
     func testPartialViewKeepsTheDragFollowingButNeverStartsOne() {
         var d = HandDriver()
         _ = dragging(&d)
-        let partial = d.run(count: 5, move: right, mode: .partial, omit: [.wrist])
+        let partial = d.run(move: right, count: 5, mode: .partial, omit: [.wrist])
         XCTAssertTrue(partial.allSatisfy { $0.intent == .pinch && $0.pinch.dragFollowsIndex && $0.actions.isEmpty })
         XCTAssertEqual(d.open(count: 2).buttonActions, [.endDrag])
     }
