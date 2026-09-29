@@ -7,14 +7,18 @@ public struct GestureConfiguration: Equatable, Sendable, Codable {
     public var doubleClickMaxDistance: Double
     /// Holding a pinch this long turns the click candidate into a drag.
     public var dragHoldDuration: TimeInterval
-    /// Moving this far (normalized display units) from the anchor turns the candidate into a drag
-    /// immediately. Pinch-induced fingertip drift must stay below it.
+    /// Moving the finger this far (normalized display units) from where it was when the pinch
+    /// was confirmed turns the candidate into a drag immediately. Pinch-induced fingertip drift
+    /// must stay below it.
     public var dragMovementThreshold: Double
     /// The click anchor is the cursor position this long BEFORE the pinch was confirmed,
     /// i.e. before the fingers started closing and dragging the index tip.
     public var anchorLookback: TimeInterval
     /// Short tracking dropouts shorter than this are ignored (no release mid-drag).
     public var trackingLossGracePeriod: TimeInterval
+    /// After a drag ends, the cursor–finger offset used during the drag fades linearly to zero
+    /// over this time instead of snapping back. 0 = snap immediately.
+    public var dragOffsetDecayDuration: TimeInterval
 
     /// Starting values only — they MUST be tuned on real hardware (REQUIRES MACOS).
     public init(
@@ -23,7 +27,8 @@ public struct GestureConfiguration: Equatable, Sendable, Codable {
         dragHoldDuration: TimeInterval = 0.3,
         dragMovementThreshold: Double = 0.03,
         anchorLookback: TimeInterval = 0.07,
-        trackingLossGracePeriod: TimeInterval = 0.15
+        trackingLossGracePeriod: TimeInterval = 0.15,
+        dragOffsetDecayDuration: TimeInterval = 0.2
     ) {
         self.doubleClickInterval = doubleClickInterval
         self.doubleClickMaxDistance = doubleClickMaxDistance
@@ -31,6 +36,7 @@ public struct GestureConfiguration: Equatable, Sendable, Codable {
         self.dragMovementThreshold = dragMovementThreshold
         self.anchorLookback = anchorLookback
         self.trackingLossGracePeriod = trackingLossGracePeriod
+        self.dragOffsetDecayDuration = dragOffsetDecayDuration
     }
 }
 
@@ -40,9 +46,11 @@ public enum GesturePhase: Equatable, Sendable {
     /// Index finger moves the cursor.
     case pointing
     /// Pinch confirmed; cursor frozen at `anchor`. Nothing has been sent to the OS yet.
-    case clickCandidate(anchor: Point2D, startedAt: TimeInterval, clickCount: Int)
-    /// Mouse button is down; cursor follows the finger.
-    case dragging(position: Point2D)
+    /// `fingerAtStart` is the finger position when the pinch was confirmed.
+    case clickCandidate(anchor: Point2D, fingerAtStart: Point2D, startedAt: TimeInterval, clickCount: Int)
+    /// Mouse button is down. cursor = finger + offset, where offset = anchor − finger at drag
+    /// start, so entering the drag never moves the cursor.
+    case dragging(position: Point2D, offset: Point2D)
 }
 
 public enum CancellationReason: Equatable, Sendable {
@@ -61,8 +69,8 @@ public enum GestureEvent: Equatable, Sendable {
 }
 
 public enum GestureInput: Equatable, Sendable {
-    /// `cursor` is the smoothed, normalized display position of the index tip.
-    case frame(timestamp: TimeInterval, cursor: Point2D, isPinched: Bool)
+    /// `finger` is the smoothed, normalized display position of the index tip.
+    case frame(timestamp: TimeInterval, finger: Point2D, isPinched: Bool)
     case trackingLost(timestamp: TimeInterval)
     case paused(timestamp: TimeInterval)
 }
@@ -83,9 +91,11 @@ public struct GestureOutput: Equatable, Sendable {
 ///
 /// Key rules:
 /// - mouseDown is deferred until the gesture is resolved: release → click (down+up at the
-///   anchor), hold or large move → drag (down at the anchor, then drags). So a cancelled
-///   click candidate never reaches the OS.
+///   anchor), hold or large move → drag (down at the anchor). So a cancelled click candidate
+///   never reaches the OS.
 /// - The click lands on the anchor captured before the fingers closed (stabilization).
+/// - The drag continues from the anchor with a cursor–finger offset: no jump on entry, and the
+///   offset fades out after release: no jump on exit.
 /// - A held pinch always drags with clickCount 1: it is never a double click.
 /// - Tracking loss / pause while dragging always sends mouseUp (no stuck button).
 /// - After loss / pause, the hand must open once before a new pinch is accepted.
@@ -101,16 +111,23 @@ public struct GestureStateMachine: Sendable {
         var clickCount: Int
     }
 
+    private struct ResidualOffset: Sendable {
+        var offset: Point2D
+        var releasedAt: TimeInterval
+    }
+
     private static let historyDuration: TimeInterval = 0.5
 
     public var configuration: GestureConfiguration
     public private(set) var phase: GesturePhase = .idle
     public private(set) var requiresOpenHandBeforePinch = true
 
+    /// Displayed cursor positions (not raw finger positions), for the click anchor lookback.
     private var history: [Sample] = []
     private var lastEmittedCursor: Point2D?
     private var lastClick: ClickRecord?
     private var trackingLostSince: TimeInterval?
+    private var residual: ResidualOffset?
 
     public init(configuration: GestureConfiguration = GestureConfiguration()) {
         self.configuration = configuration
@@ -118,8 +135,8 @@ public struct GestureStateMachine: Sendable {
 
     public mutating func update(_ input: GestureInput) -> GestureOutput {
         switch input {
-        case let .frame(timestamp, cursor, isPinched):
-            return handleFrame(time: timestamp, cursor: cursor, isPinched: isPinched)
+        case let .frame(timestamp, finger, isPinched):
+            return handleFrame(time: timestamp, finger: finger, isPinched: isPinched)
         case let .trackingLost(timestamp):
             return handleTrackingLost(time: timestamp)
         case .paused:
@@ -127,13 +144,14 @@ public struct GestureStateMachine: Sendable {
         }
     }
 
-    private mutating func handleFrame(time: TimeInterval, cursor: Point2D, isPinched: Bool) -> GestureOutput {
+    private mutating func handleFrame(time: TimeInterval, finger: Point2D, isPinched: Bool) -> GestureOutput {
         trackingLostSince = nil
-        record(time: time, position: cursor)
         var output = GestureOutput()
 
         switch phase {
         case .idle, .pointing:
+            let cursor = Rect2D.unit.clamp(finger + residualOffset(at: time))
+            record(time: time, position: cursor)
             if isPinched && !requiresOpenHandBeforePinch {
                 var anchor = position(at: time - configuration.anchorLookback) ?? cursor
                 var clickCount = 1
@@ -144,7 +162,7 @@ public struct GestureStateMachine: Sendable {
                     clickCount = 2
                     anchor = last.position
                 }
-                phase = .clickCandidate(anchor: anchor, startedAt: time, clickCount: clickCount)
+                phase = .clickCandidate(anchor: anchor, fingerAtStart: finger, startedAt: time, clickCount: clickCount)
                 output.events.append(.pinchStarted(clickCount: clickCount))
                 emitMove(to: anchor, into: &output)
             } else {
@@ -153,7 +171,8 @@ public struct GestureStateMachine: Sendable {
                 emitMove(to: cursor, into: &output)
             }
 
-        case let .clickCandidate(anchor, startedAt, clickCount):
+        case let .clickCandidate(anchor, fingerAtStart, startedAt, clickCount):
+            record(time: time, position: anchor)
             if !isPinched {
                 output.actions.append(.mouseDown(at: anchor, clickCount: clickCount))
                 output.actions.append(.mouseUp(at: anchor, clickCount: clickCount))
@@ -162,26 +181,30 @@ public struct GestureStateMachine: Sendable {
                 lastEmittedCursor = anchor
                 phase = .pointing
             } else if time - startedAt >= configuration.dragHoldDuration
-                        || cursor.distance(to: anchor) >= configuration.dragMovementThreshold {
+                        || finger.distance(to: fingerAtStart) >= configuration.dragMovementThreshold {
+                // The cursor stays on the anchor; from now on it follows finger + offset.
                 output.actions.append(.mouseDown(at: anchor, clickCount: 1))
-                output.actions.append(.mouseDrag(to: cursor))
                 output.events.append(.dragStarted)
                 lastClick = nil
-                lastEmittedCursor = cursor
-                phase = .dragging(position: cursor)
+                lastEmittedCursor = anchor
+                phase = .dragging(position: anchor, offset: anchor - finger)
             }
 
-        case let .dragging(position):
+        case let .dragging(current, offset):
+            let cursor = Rect2D.unit.clamp(finger + offset)
+            record(time: time, position: cursor)
             if !isPinched {
                 // Release at the last drag position: fingers opening shift the index tip.
-                output.actions.append(.mouseUp(at: position, clickCount: 1))
+                output.actions.append(.mouseUp(at: current, clickCount: 1))
                 output.events.append(.dragEnded)
                 lastClick = nil
+                lastEmittedCursor = current
+                residual = ResidualOffset(offset: current - finger, releasedAt: time)
                 phase = .pointing
-            } else if cursor != position {
+            } else if cursor != current {
                 output.actions.append(.mouseDrag(to: cursor))
                 lastEmittedCursor = cursor
-                phase = .dragging(position: cursor)
+                phase = .dragging(position: cursor, offset: offset)
             }
         }
         return output
@@ -199,8 +222,8 @@ public struct GestureStateMachine: Sendable {
 
     private mutating func cancel(reason: CancellationReason) -> GestureOutput {
         var output = GestureOutput()
-        if case let .dragging(position) = phase {
-            output.actions.append(.mouseUp(at: position, clickCount: 1))
+        if case let .dragging(current, _) = phase {
+            output.actions.append(.mouseUp(at: current, clickCount: 1))
         }
         if phase != .idle {
             output.events.append(.cancelled(reason))
@@ -211,7 +234,20 @@ public struct GestureStateMachine: Sendable {
         lastEmittedCursor = nil
         lastClick = nil
         trackingLostSince = nil
+        residual = nil
         return output
+    }
+
+    /// Linearly fading post-drag offset; zero once the decay time has elapsed.
+    private mutating func residualOffset(at time: TimeInterval) -> Point2D {
+        guard let r = residual else { return .zero }
+        let duration = configuration.dragOffsetDecayDuration
+        let remaining = duration > 0 ? 1 - (time - r.releasedAt) / duration : 0
+        guard remaining > 0 else {
+            residual = nil
+            return .zero
+        }
+        return r.offset * min(remaining, 1)
     }
 
     private mutating func emitMove(to point: Point2D, into output: inout GestureOutput) {

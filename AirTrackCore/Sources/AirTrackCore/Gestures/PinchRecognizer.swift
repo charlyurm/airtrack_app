@@ -6,13 +6,18 @@ public struct PinchConfiguration: Equatable, Sendable, Codable {
     /// Pinch releases when the ratio rises above this (hysteresis band in between).
     public var releaseRatio: Double
     /// Consecutive frames required to confirm a start / release (rejects one-frame spikes).
+    /// PROVISIONAL: 2 frames ≈ 33 ms at 30 fps, accepted to avoid false clicks. Revisit only
+    /// with latency measured on real hardware (fewer frames, timestamps or prediction).
     public var startConfirmationFrames: Int
     public var releaseConfirmationFrames: Int
     /// Frames without a measurable ratio (e.g. occluded thumb) tolerated while pinched.
     public var maxUnmeasurableFrames: Int
     public var minimumConfidence: Double
 
-    /// Starting values only — they MUST be calibrated on real tracking data (REQUIRES MACOS).
+    /// UNCALIBRATED starting values. 0.25 / 0.35 are ratios of hand size (see HandScale),
+    /// chosen from typical hand proportions, not from measurements. They MUST be validated
+    /// with the real camera and real hands (REQUIRES MACOS). Never replace them with an
+    /// absolute image distance.
     public init(
         startRatio: Double = 0.25,
         releaseRatio: Double = 0.35,

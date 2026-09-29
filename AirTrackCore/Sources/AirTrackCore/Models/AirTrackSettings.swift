@@ -8,8 +8,10 @@ public struct AirTrackSettings: Equatable, Sendable, Codable {
     /// Reserved for PHASE 5 (scroll). Not used yet.
     public var scrollSensitivity: Double = 1.0
     /// Pinch start threshold, as a ratio of hand size (see HandScale).
+    /// Initial, UNCALIBRATED value — validate with the real camera.
     public var pinchThreshold: Double = 0.25
     /// Pinch release threshold, as a ratio of hand size. Must be > pinchThreshold.
+    /// Initial, UNCALIBRATED value — validate with the real camera.
     public var pinchReleaseThreshold: Double = 0.35
     public var doubleClickInterval: TimeInterval = 0.4
     public var mirrorCamera: Bool = true

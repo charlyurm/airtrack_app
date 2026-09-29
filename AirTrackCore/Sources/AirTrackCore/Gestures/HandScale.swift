@@ -4,7 +4,9 @@ import Foundation
 ///
 /// Reference length: wrist → index MCP (a rigid bone segment that does not change
 /// with finger pose). Known limitation: it is a 2D projection, so strong hand
-/// pitch/yaw shortens it. REQUIRES MACOS to validate on real tracking data.
+/// pitch/yaw shortens it. REQUIRES MACOS to validate on real tracking data; if it
+/// proves unstable, a different rigid segment can replace it here without touching
+/// the thresholds' meaning (they stay ratios of hand size).
 public enum HandScale {
     /// In image heights. Below this the hand is too small / degenerate to measure.
     public static let minimumReferenceLength = 0.02

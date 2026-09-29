@@ -25,9 +25,12 @@
 
 ## Sandbox
 
-**App Sandbox desactivado** durante el MVP (decisión aprobada). Por eso no hace
-falta el entitlement `com.apple.security.device.camera`; basta con
-`NSCameraUsageDescription`.
+**App Sandbox desactivado** durante el MVP (decisión aprobada).
+
+Aun sin sandbox, si el target tiene **Hardened Runtime** activado, la cámara
+requiere el entitlement `com.apple.security.device.camera` (Signing & Capabilities →
+Hardened Runtime → Resource Access → Camera). `NSCameraUsageDescription` es
+obligatorio en todos los casos. Pasos concretos en `MACOS_SETUP.md` (H y J).
 
 ## Riesgo conocido en desarrollo
 

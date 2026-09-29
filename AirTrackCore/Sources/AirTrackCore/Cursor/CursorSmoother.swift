@@ -2,7 +2,8 @@ import Foundation
 
 /// Exponential moving average: smoothed = previous * alpha + current * (1 - alpha).
 ///
-/// Per-frame (not per-second): the effective lag depends on the frame rate.
+/// Per-frame (not per-second): the effective lag depends on the frame rate. Kept on purpose
+/// for now; time-based smoothing (same feel at 30/60/120 fps) is a planned improvement.
 /// alpha is capped below 1 so the cursor can never freeze.
 public struct CursorSmoother: Sendable {
     public static let smoothingRange: ClosedRange<Double> = 0.0...0.95

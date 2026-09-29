@@ -143,7 +143,8 @@ AirTrack/
 │       ├── GestureStateMachineTests.swift
 │       └── GestureEngineTests.swift
 │
-├── AirTrack.xcodeproj                 ← created on the Mac (Documentation/MACOS_SETUP.md)
+├── AirTrack.xcodeproj                 ← created on the Mac at PHASE 1 start (MACOS_SETUP.md);
+│                                        Xcode may nest it as AirTrack/AirTrack.xcodeproj
 │
 ├── AirTrack/                          ← macOS layer: hardware + UI only
 │   │
@@ -531,6 +532,18 @@ Mouse Up
 ```
 
 The system must prevent accidental drag initiation.
+
+> **Amendment — drag continuity (approved):** mouseDown is sent at the click anchor
+> and the drag continues with a cursor–finger offset, so entering a drag never
+> moves the cursor:
+>
+> ```text
+> offset = anchor − finger (at drag start)
+> cursor = clamp(finger + offset)
+> ```
+>
+> After release the offset fades linearly to zero over 200 ms instead of snapping.
+> Details in `Documentation/GESTURES.md`.
 
 ---
 

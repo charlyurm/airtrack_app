@@ -51,7 +51,7 @@ public struct GestureEngine: Sendable {
             return output
         }
 
-        let cursor = smoother.smooth(mapped)
+        let finger = smoother.smooth(mapped)
         let reading = pinchRecognizer.update(with: hand)
         lastPinchReading = reading
 
@@ -63,7 +63,7 @@ public struct GestureEngine: Sendable {
             let clearlyOpen = reading.ratio.map { $0 > releaseRatio } ?? false
             if !clearlyOpen { isPinched = true }
         }
-        return stateMachine.update(.frame(timestamp: hand.timestamp, cursor: cursor, isPinched: isPinched))
+        return stateMachine.update(.frame(timestamp: hand.timestamp, finger: finger, isPinched: isPinched))
     }
 
     private mutating func resetTracking() {
