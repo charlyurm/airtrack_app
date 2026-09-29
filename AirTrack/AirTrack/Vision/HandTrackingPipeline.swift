@@ -24,6 +24,11 @@ struct TrackingResult: Sendable {
     let candidateCount: Int
     /// Why candidates were rejected this frame (false-positive diagnostics).
     let rejections: [HandRejectionReason]
+    /// PHASE 2.1: which index tip (if any) may drive the cursor this frame and how it was
+    /// obtained (full / partial / index continuity / holding / lost).
+    let pointer: PointerObservation
+    /// Width / height of the processed frame (positions the pointer marker in the preview).
+    let imageAspectRatio: Double
     /// Cursor position posted this frame; nil when the cursor was not moved.
     let cursor: CursorUpdate?
 }
@@ -34,11 +39,13 @@ struct TrackingResult: Sendable {
 /// single-slot mailbox. A newer frame replaces the waiting one, and when Vision finishes it
 /// immediately takes the newest waiting frame. Memory and latency stay bounded.
 /// Cursor (PHASE 2): right after validation, on the same Vision queue, the CursorController
-/// turns the primary hand into a cursor position and MacOSEventController posts it. No extra
+/// turns the pointer into a cursor position and MacOSEventController posts it. No extra
 /// queue or thread hop between hand and cursor. Only when the main actor has allowed cursor
 /// control (enabled, not paused, permission granted, camera running).
+/// PHASE 2.1: PointerTracker wraps the HandPresenceFilter (strict acquisition, unchanged) and
+/// decides whether an established hand may continue in a degraded mode near the frame edges.
 /// @unchecked Sendable: `lock` guards the mailbox, counters and the cursor-allowed flag; the
-/// engine, presence filter and cursor controller are confined to `visionQueue`.
+/// engine, pointer tracker and cursor controller are confined to `visionQueue`.
 final class HandTrackingPipeline: @unchecked Sendable {
     /// Called on the Vision queue for every processed frame.
     var onResult: (@Sendable (TrackingResult) -> Void)?
@@ -60,10 +67,11 @@ final class HandTrackingPipeline: @unchecked Sendable {
 
     // visionQueue only
     private let engine = VisionHandTrackingEngine()
-    private var presenceFilter = HandPresenceFilter()
+    private var pointerTracker = PointerTracker()
     private var cursorController = CursorController()
     private let events = MacOSEventController()
     private var lastHandCount = 0
+    private var lastPointerMode: PointerTrackingMode = .lost
     private var consecutiveErrors = 0
 
     /// Called on the camera's video queue.
@@ -93,7 +101,10 @@ final class HandTrackingPipeline: @unchecked Sendable {
     }
 
     func apply(_ settings: AirTrackSettings) {
-        visionQueue.async { [self] in cursorController.apply(settings) }
+        visionQueue.async { [self] in
+            cursorController.apply(settings)
+            pointerTracker.apply(settings)
+        }
     }
 
     func recordCameraDrop() {
@@ -109,10 +120,11 @@ final class HandTrackingPipeline: @unchecked Sendable {
             metrics = TrackingMetrics()
         }
         visionQueue.async { [self] in
-            presenceFilter.reset()
+            pointerTracker.reset()
             cursorController.reset()
             if lastHandCount > 0 { Log.tracking.info("Tracking reset") }
             lastHandCount = 0
+            lastPointerMode = .lost
             consecutiveErrors = 0
         }
     }
@@ -146,7 +158,8 @@ final class HandTrackingPipeline: @unchecked Sendable {
             }
         }
         // A failed request yields no candidates → no hands this frame. Nothing is carried over.
-        let hands = presenceFilter.update(candidates: candidates)
+        let tracked = pointerTracker.update(candidates: candidates, timestamp: frame.timestamp)
+        let hands = tracked.hands
         let end = ProcessInfo.processInfo.systemUptime
         let captureToResult = CMClockGetTime(CMClockGetHostTimeClock()).seconds - frame.timestamp
 
@@ -158,11 +171,17 @@ final class HandTrackingPipeline: @unchecked Sendable {
             }
             lastHandCount = hands.count
         }
-        let cursor = updateCursor(hands: hands, timestamp: frame.timestamp)
+        if tracked.pointer.mode != lastPointerMode {
+            Log.tracking.debug("Pointer \(tracked.pointer.mode.rawValue, privacy: .public)")
+            lastPointerMode = tracked.pointer.mode
+        }
+        let cursor = updateCursor(pointer: tracked.pointer)
         onResult?(TrackingResult(
             hands: hands,
             candidateCount: candidates.count,
-            rejections: presenceFilter.lastRejections,
+            rejections: pointerTracker.lastRejections,
+            pointer: tracked.pointer,
+            imageAspectRatio: frame.aspectRatio,
             cursor: cursor
         ))
 
@@ -179,17 +198,17 @@ final class HandTrackingPipeline: @unchecked Sendable {
         if let snapshot { onMetrics?(snapshot) }
     }
 
-    /// visionQueue. Moves the system cursor only for a valid primary hand while allowed.
-    private func updateCursor(hands: [HandState], timestamp: TimeInterval) -> CursorUpdate? {
+    /// visionQueue. Moves the system cursor only for a trusted pointer while allowed.
+    private func updateCursor(pointer: PointerObservation) -> CursorUpdate? {
         guard lock.withLock({ cursorAllowed }) else {
             cursorController.reset()
             return nil
         }
         // Only read the real cursor position when a new session starts (reacquisition).
-        let reference = cursorController.needsReferencePosition ? events.currentCursorLocation() : nil
+        let startsSession = pointer.startsSession || cursorController.needsReferencePosition
+        let reference = pointer.mode.providesPointer && startsSession ? events.currentCursorLocation() : nil
         let update = cursorController.update(
-            hands: hands,
-            timestamp: timestamp,
+            pointer: pointer,
             display: events.mainDisplayBounds(),
             isActive: true,
             currentCursor: reference

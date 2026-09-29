@@ -9,7 +9,7 @@ struct TrackingStatusView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("AirTrack").font(.title2.bold())
-                Text("PHASE 2 · Cursor control debug").font(.caption).foregroundStyle(.secondary)
+                Text("PHASE 2.1 · Cursor control debug").font(.caption).foregroundStyle(.secondary)
 
                 section("Estado") {
                     row("Camera", model.cameraStatus.label, color: cameraColor)
@@ -126,11 +126,21 @@ struct TrackingStatusView: View {
                 .keyboardShortcut("a", modifiers: [.control, .option, .command])
                 .disabled(!model.cursorEnabled)
             row("Primary hand", model.hands.isEmpty ? "—" : "1 de \(model.hands.count)")
+            row("Pointer", pointerLabel, color: pointerColor)
+            row("Index confidence", format(model.pointer.indexConfidence, "%.2f"))
             row("Mapped cursor", model.cursor.map { String(format: "%.0f, %.0f pt", $0.screen.x, $0.screen.y) } ?? "—")
+            row("Finger speed", format(model.cursor?.speed, "%.2f scr/s"))
+            row("Smoothing now", format(model.cursor?.smoothing, "%.2f"))
+            row("Gaps bridged / losses", "\(model.bridgedGaps) / \(model.pointerLosses)")
             row("Active area", activeAreaLabel)
             slider("Sensitivity", value: settingBinding(\.cursorSensitivity), range: CursorMapper.sensitivityRange, format: "%.2f×")
-            slider("Smoothing", value: settingBinding(\.cursorSmoothing), range: 0...0.9, format: "%.2f")
+            slider("Smoothing (rest)", value: settingBinding(\.cursorSmoothing), range: 0...0.9, format: "%.2f")
+            slider("Speed response", value: settingBinding(\.cursorSpeedResponse), range: AdaptiveCursorSmoother.speedResponseRange, format: "%.1f")
             slider("Dead zone", value: settingBinding(\.cursorDeadZone), range: 0...0.02, format: "%.3f")
+            slider("Reacquisition glide", value: settingBinding(\.cursorReacquisitionBlend), range: 0...0.5, format: "%.2f s")
+            Toggle("Peripheral tracking", isOn: settingBinding(\.cursorPeripheralTracking))
+            Text("Smoothing now: 0 = cursor pegado al dedo, cerca de 1 = muy suavizado. Speed response 0 = suavizado fijo (Phase 2). Pointer: FULL mano completa · PARTIAL mano parcial · INDEX solo el índice · HOLD hueco breve (cursor quieto) · LOST.")
+                .font(.caption2).foregroundStyle(.secondary)
             Text("Para soltar el cursor: saca la mano del cuadro, pulsa Pausar o apaga Cursor Control. Solo la mano 1 mueve el cursor. Pantalla: la principal.")
                 .font(.caption2).foregroundStyle(.secondary)
         }
@@ -155,12 +165,31 @@ struct TrackingStatusView: View {
         }
     }
 
+    private var pointerLabel: String {
+        switch model.pointer.mode {
+        case .full: "FULL"
+        case .partial: "PARTIAL"
+        case .indexContinuity: "INDEX"
+        case .holding: "HOLD"
+        case .lost: "LOST"
+        }
+    }
+
+    private var pointerColor: Color {
+        switch model.pointer.mode {
+        case .full: .green
+        case .partial: .yellow
+        case .indexContinuity, .holding: .orange
+        case .lost: .secondary
+        }
+    }
+
     private var activeAreaLabel: String {
         let area = model.settings.cursorMapper.validActiveArea
         return String(format: "x %.2f–%.2f · y %.2f–%.2f", area.minX, area.maxX, area.minY, area.maxY)
     }
 
-    private func settingBinding(_ keyPath: WritableKeyPath<AirTrackSettings, Double>) -> Binding<Double> {
+    private func settingBinding<Value>(_ keyPath: WritableKeyPath<AirTrackSettings, Value>) -> Binding<Value> {
         Binding(
             get: { model.settings[keyPath: keyPath] },
             set: { newValue in

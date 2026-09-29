@@ -30,7 +30,9 @@ private struct PreviewPane: View {
                 hands: model.hands,
                 mirrored: model.mirrorPreview,
                 activeArea: model.settings.cursorMapper.effectiveArea,
-                cursorMirrored: model.settings.mirrorCamera
+                cursorMirrored: model.settings.mirrorCamera,
+                pointer: model.pointer,
+                imageAspectRatio: model.imageAspectRatio
             )
             if model.cameraStatus != .running {
                 Text(placeholder)

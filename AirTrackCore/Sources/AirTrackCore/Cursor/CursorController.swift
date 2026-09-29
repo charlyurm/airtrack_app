@@ -30,23 +30,29 @@ public struct CursorUpdate: Equatable, Sendable {
     public var screen: Point2D
     /// Where the finger points before smoothing and reacquisition blending (diagnostics).
     public var target: Point2D
+    /// PHASE 2.1 diagnostics: estimated finger speed (display-normalized units per second) and
+    /// the weight of the previous position used this frame (0 = raw finger, 1 = frozen).
+    public var speed: Double = 0
+    public var smoothing: Double = 0
 }
 
 /// HandState → cursor position. Pure: knows nothing about cameras, Vision or macOS.
 ///
-/// Per frame: primary hand (first of the already validated, HandOrdering-sorted hands) →
-/// indexTip → active area → dead zone → sensitivity → smoothing → reacquisition blend →
-/// ScreenMapper. Smoothing runs on display-normalized positions; ScreenMapper is affine, so
-/// this equals smoothing in screen space (up to the edge clamp).
+/// Per frame: index tip (primary hand, or PointerTracker's decision) → active area → dead
+/// zone → sensitivity → adaptive smoothing (PHASE 2.1, AdaptiveCursorSmoother) →
+/// reacquisition blend → ScreenMapper. Smoothing runs on display-normalized positions;
+/// ScreenMapper is affine, so this equals smoothing in screen space (up to the edge clamp).
 ///
-/// Safety: any frame without a usable primary index tip, or with control inactive, returns
-/// nil (the caller must not move the cursor) and drops all history, so stale positions are
-/// never reused. The next valid frame starts a new session anchored at `currentCursor`.
+/// Safety: a frame without a usable index tip, or with control inactive, returns nil (the
+/// caller must not move the cursor). A LOSS drops all history, so stale positions are never
+/// reused; the next valid frame starts a new session anchored at `currentCursor`. A HOLD
+/// (PointerTracker: short gap of an established hand) also returns nil but keeps the session,
+/// so the cursor stays still and continues from where it is, without a new blend.
 public struct CursorController: Sendable {
     public private(set) var settings: AirTrackSettings
     private var mapper: CursorMapper
     private var deadZone: DeadZoneFilter
-    private var smoother: CursorSmoother
+    private var smoother: AdaptiveCursorSmoother
     private var blend: Blend?
     public private(set) var isTracking = false
 
@@ -60,7 +66,7 @@ public struct CursorController: Sendable {
         self.settings = s
         self.mapper = s.cursorMapper
         self.deadZone = DeadZoneFilter(threshold: s.cursorDeadZone)
-        self.smoother = CursorSmoother(smoothing: s.cursorSmoothing)
+        self.smoother = AdaptiveCursorSmoother(restSmoothing: s.cursorSmoothing, speedResponse: s.cursorSpeedResponse)
     }
 
     /// True when the next valid frame starts a new session, i.e. the caller should pass the
@@ -72,9 +78,12 @@ public struct CursorController: Sendable {
         self.settings = s
         mapper = s.cursorMapper
         deadZone.threshold = s.cursorDeadZone
-        smoother.smoothing = s.cursorSmoothing
+        smoother.restSmoothing = s.cursorSmoothing
+        smoother.speedResponse = s.cursorSpeedResponse
     }
 
+    /// Phase 2 entry point: the primary hand's index tip; no tip = immediate loss.
+    ///
     /// - Parameters:
     ///   - hands: validated hands of ONE frame, primary first (HandPresenceFilter output).
     ///   - display: target display rect in its coordinate space (points).
@@ -92,16 +101,61 @@ public struct CursorController: Sendable {
         guard isActive,
               display.isValid,
               let hand = hands.first,
-              let tip = hand.position(of: .indexTip, minimumConfidence: settings.minimumLandmarkConfidence),
-              let inArea = mapper.normalizedInActiveArea(tip)
+              let tip = hand.position(of: .indexTip, minimumConfidence: settings.minimumLandmarkConfidence)
         else {
+            reset()
+            return nil
+        }
+        return step(tip: tip, timestamp: timestamp, display: display, currentCursor: currentCursor)
+    }
+
+    /// PHASE 2.1 entry point: PointerTracker's decision for this frame.
+    /// - full / partial / indexContinuity: move toward this frame's index tip.
+    /// - holding: return nil and keep the session (cursor stays still, nothing stale is used).
+    /// - lost: return nil and drop the session.
+    public mutating func update(
+        pointer: PointerObservation,
+        display: Rect2D,
+        isActive: Bool,
+        currentCursor: Point2D? = nil
+    ) -> CursorUpdate? {
+        guard isActive, display.isValid else {
+            reset()
+            return nil
+        }
+        switch pointer.mode {
+        case .lost:
+            reset()
+            return nil
+        case .holding:
+            return nil
+        case .full, .partial, .indexContinuity:
+            guard let tip = pointer.indexTip else {
+                reset()
+                return nil
+            }
+            if pointer.startsSession { reset() }
+            return step(tip: tip, timestamp: pointer.timestamp, display: display, currentCursor: currentCursor)
+        }
+    }
+
+    /// Forget everything about the previous session (tracking lost, disabled, paused…).
+    public mutating func reset() {
+        isTracking = false
+        blend = nil
+        deadZone.reset()
+        smoother.reset()
+    }
+
+    private mutating func step(tip: Point2D, timestamp: TimeInterval, display: Rect2D, currentCursor: Point2D?) -> CursorUpdate? {
+        guard let inArea = mapper.normalizedInActiveArea(tip) else {
             reset()
             return nil
         }
 
         let stable = deadZone.apply(inArea)
         let target = mapper.applyingSensitivity(stable)
-        var position = smoother.smooth(target)
+        var position = smoother.smooth(target, at: timestamp)
 
         if !isTracking {
             isTracking = true
@@ -125,14 +179,6 @@ public struct CursorController: Sendable {
             reset()
             return nil
         }
-        return CursorUpdate(normalized: position, screen: screen, target: target)
-    }
-
-    /// Forget everything about the previous session (tracking lost, disabled, paused…).
-    public mutating func reset() {
-        isTracking = false
-        blend = nil
-        deadZone.reset()
-        smoother.reset()
+        return CursorUpdate(normalized: position, screen: screen, target: target, speed: smoother.speed, smoothing: smoother.lastWeight)
     }
 }

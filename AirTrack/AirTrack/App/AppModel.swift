@@ -34,6 +34,14 @@ final class AppModel {
     private(set) var settings = AirTrackSettings.default
     /// Cursor position posted in the latest frame (nil = cursor not moved).
     private(set) var cursor: CursorUpdate?
+    /// PHASE 2.1: pointer decision of the latest frame (full / partial / index / holding / lost).
+    private(set) var pointer = PointerObservation.lost(at: 0)
+    /// Short gaps bridged by holding (the hand continued without a new acquisition) and real
+    /// losses since the camera started. Diagnostics for the Mac validation.
+    private(set) var bridgedGaps = 0
+    private(set) var pointerLosses = 0
+    /// Aspect ratio of the latest processed frame (overlay geometry).
+    private(set) var imageAspectRatio = 16.0 / 9.0
     @ObservationIgnored private var lastAccessibilityCheck: TimeInterval = 0
 
     let camera: CameraManager
@@ -57,7 +65,7 @@ final class AppModel {
             enabled: cursorEnabled,
             paused: cursorPaused,
             permissionGranted: accessibilityGranted,
-            handAvailable: cameraStatus == .running && !hands.isEmpty
+            handAvailable: cameraStatus == .running && (!hands.isEmpty || pointer.mode.hasEstablishedHand)
         )
     }
 
@@ -189,6 +197,7 @@ final class AppModel {
         cameraStatus = status
         if status != .running {
             hands = []
+            pointer = .lost(at: 0)
             candidateCount = 0
             rejections = []
         }
@@ -206,6 +215,10 @@ final class AppModel {
         candidateCount = result.candidateCount
         rejections = result.rejections
         cursor = result.cursor
+        if pointer.mode == .holding, result.pointer.mode.providesPointer { bridgedGaps += 1 }
+        if pointer.mode != .lost, result.pointer.mode == .lost { pointerLosses += 1 }
+        pointer = result.pointer
+        if result.imageAspectRatio.isFinite, result.imageAspectRatio > 0 { imageAspectRatio = result.imageAspectRatio }
         if !result.hands.isEmpty { hasSeenHand = true }
     }
 
@@ -215,6 +228,9 @@ final class AppModel {
         rejections = []
         hasSeenHand = false
         cursor = nil
+        pointer = .lost(at: 0)
+        bridgedGaps = 0
+        pointerLosses = 0
         metrics = TrackingMetrics()
         pipeline.reset()
     }

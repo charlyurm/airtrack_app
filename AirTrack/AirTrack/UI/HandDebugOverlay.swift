@@ -17,6 +17,11 @@ struct HandDebugOverlay: View {
     /// in the cursor's mirrored space when `cursorMirrored`. Drawn dashed; nil hides it.
     var activeArea: Rect2D? = nil
     var cursorMirrored = true
+    /// PHASE 2.1: the index tip that drives the cursor. Drawn as a ring colored by mode
+    /// (green full · yellow partial · orange index only), so degraded tracking near the edges
+    /// is visible even when no full skeleton is drawn.
+    var pointer: PointerObservation? = nil
+    var imageAspectRatio = 16.0 / 9.0
 
     static let fingerColors: [Finger: Color] = [
         .thumb: .orange, .index: .green, .middle: .blue, .ring: .purple, .pinky: .pink,
@@ -28,6 +33,7 @@ struct HandDebugOverlay: View {
             for (index, hand) in hands.enumerated() {
                 draw(hand, number: index + 1, in: &context, size: size)
             }
+            if let pointer { drawPointer(pointer, in: &context, size: size) }
         }
         .allowsHitTesting(false)
     }
@@ -85,6 +91,27 @@ struct HandDebugOverlay: View {
         }
     }
 
+    private func drawPointer(_ pointer: PointerObservation, in context: inout GraphicsContext, size: CGSize) {
+        guard let tip = pointer.indexTip,
+              let v = PreviewGeometry.viewPoint(
+                  for: tip, imageAspectRatio: aspect,
+                  viewWidth: Double(size.width), viewHeight: Double(size.height), mirrored: mirrored
+              ) else { return }
+        let color: Color = switch pointer.mode {
+        case .full: .green
+        case .partial: .yellow
+        default: .orange
+        }
+        let radius: CGFloat = 13
+        let ring = Path(ellipseIn: CGRect(x: v.x - radius, y: v.y - radius, width: radius * 2, height: radius * 2))
+        context.stroke(ring, with: .color(color), lineWidth: 2.5)
+    }
+
+    /// The hands' aspect ratio if any, otherwise the latest frame's.
+    private var aspect: Double {
+        hands.first?.imageAspectRatio ?? imageAspectRatio
+    }
+
     private func drawActiveArea(_ area: Rect2D, in context: inout GraphicsContext, size: CGSize) {
         // Corners in cursor space → raw image space (undo the cursor mirror) → view.
         let corners = [
@@ -92,8 +119,7 @@ struct HandDebugOverlay: View {
             Point2D(x: area.maxX, y: area.maxY), Point2D(x: area.minX, y: area.maxY),
         ].compactMap { corner -> CGPoint? in
             let raw = cursorMirrored ? Point2D(x: 1 - corner.x, y: corner.y) : corner
-            // The aspect ratio only positions the rect inside the letterbox; use the hands' if any.
-            let aspect = hands.first?.imageAspectRatio ?? 16.0 / 9.0
+            // The aspect ratio only positions the rect inside the letterbox.
             guard let v = PreviewGeometry.viewPoint(
                 for: raw, imageAspectRatio: aspect,
                 viewWidth: Double(size.width), viewHeight: Double(size.height), mirrored: mirrored

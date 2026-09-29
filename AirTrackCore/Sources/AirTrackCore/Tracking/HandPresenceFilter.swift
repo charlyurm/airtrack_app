@@ -54,16 +54,7 @@ public enum HandValidation {
             return .failure(.lowHandConfidence)
         }
 
-        let low = -configuration.boundsTolerance
-        let high = 1 + configuration.boundsTolerance
-        var cleaned = hand
-        cleaned.landmarks = hand.landmarks.filter { _, landmark in
-            landmark.confidence.isFinite
-                && landmark.confidence >= configuration.minimumJointConfidence
-                && landmark.position.isFinite
-                && (low...high).contains(landmark.position.x)
-                && (low...high).contains(landmark.position.y)
-        }
+        let cleaned = Self.cleaned(hand, configuration: configuration)
 
         if let missing = HandJoint.allCases.first(where: { configuration.requiredJoints.contains($0) && cleaned.landmarks[$0] == nil }) {
             return .failure(.missingRequiredJoint(missing))
@@ -76,6 +67,22 @@ public enum HandValidation {
             return .failure(.handTooSmall)
         }
         return .success(cleaned)
+    }
+
+    /// The hand with only its usable joints: confident enough, finite and inside the image
+    /// (± boundsTolerance). Never adds or moves a joint.
+    public static func cleaned(_ hand: HandState, configuration: HandFilterConfiguration) -> HandState {
+        let low = -configuration.boundsTolerance
+        let high = 1 + configuration.boundsTolerance
+        var cleaned = hand
+        cleaned.landmarks = hand.landmarks.filter { _, landmark in
+            landmark.confidence.isFinite
+                && landmark.confidence >= configuration.minimumJointConfidence
+                && landmark.position.isFinite
+                && (low...high).contains(landmark.position.x)
+                && (low...high).contains(landmark.position.y)
+        }
+        return cleaned
     }
 }
 
