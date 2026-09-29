@@ -91,6 +91,8 @@ public struct FeatureHistory: Sendable {
         public var knuckles: [HandJoint: Point2D]
         public var scale: Double
         public var pose: HandPose
+        /// PHASE 3B: thumb–index tip distance / scale of this frame (nil when unmeasured).
+        public var pinchDistance: Double? = nil
         /// Motion since the previous sample (hand scales, user space); nil when unknown.
         public var step: MotionVector?
         /// Time since the previous sample.
@@ -145,7 +147,8 @@ public struct FeatureHistory: Sendable {
                 }
             }
         }
-        samples.append(Sample(time: time, knuckles: knuckles, scale: features.scale, pose: pose, step: step, stepDuration: duration))
+        samples.append(Sample(time: time, knuckles: knuckles, scale: features.scale, pose: pose,
+                              pinchDistance: features.thumbIndexDistance, step: step, stepDuration: duration))
         trim(before: time - window)
     }
 

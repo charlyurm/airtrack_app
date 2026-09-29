@@ -31,8 +31,10 @@ struct TrackingResult: Sendable {
     let imageAspectRatio: Double
     /// PHASE 3A: interaction layer output (pose, candidate, intent, lifecycle, cursor policy).
     let interaction: InteractionFrame
-    /// Cursor position posted this frame; nil when the cursor was not moved.
+    /// Cursor position posted this frame (also the drag position); nil when not moved.
     let cursor: CursorUpdate?
+    /// PHASE 3B: the primary button is down (live drag), per the pipeline's ledger.
+    let primaryButtonDown: Bool
 }
 
 /// Camera frames → Vision (own serial queue) → validated hands.
@@ -72,6 +74,8 @@ final class HandTrackingPipeline: @unchecked Sendable {
     private var pointerTracker = PointerTracker()
     private var interactionEngine = InteractionEngine()
     private var cursorController = CursorController()
+    /// PHASE 3B: drag anchor + primary-button ledger (the only place a mouseDown is recorded).
+    private var dragController = DragController()
     private let events = MacOSEventController()
     private var lastHandCount = 0
     private var lastPointerMode: PointerTrackingMode = .lost
@@ -79,6 +83,8 @@ final class HandTrackingPipeline: @unchecked Sendable {
     /// PHASE 3A-2 settings mirrored onto the Vision queue.
     private var scrollGesturesEnabled = AirTrackSettings.default.scrollGesturesEnabled
     private var scrollDirectionInverted = AirTrackSettings.default.scrollDirectionInverted
+    /// PHASE 3B setting mirrored onto the Vision queue.
+    private var clickGesturesEnabled = AirTrackSettings.default.clickGesturesEnabled
 
     /// Called on the camera's video queue.
     func submit(_ frame: CameraFrame) {
@@ -105,17 +111,19 @@ final class HandTrackingPipeline: @unchecked Sendable {
         }
         if changed { Log.tracking.info("Cursor control \(allowed ? "active" : "inactive", privacy: .public)") }
         // Pause, cursor control off, permission lost, camera stopped: close any live gesture
-        // output right away (the camera may already be stopped, so no frame will do it).
+        // output right away (the camera may already be stopped, so no frame will do it):
+        // scroll ended, click candidate dropped, mouseUp iff a drag holds the button.
         if changed, !allowed {
-            visionQueue.async { [self] in postInteraction(interactionEngine.cancel()) }
+            visionQueue.async { [self] in closeInteraction(interactionEngine.cancel()) }
         }
     }
 
-    /// App termination: close any live gesture output before the process exits. Waits for the
-    /// Vision queue (at most one frame of work); called once, from applicationWillTerminate.
+    /// App termination: close any live gesture output (open scroll, pressed button) before the
+    /// process exits. Waits for the Vision queue (at most one frame of work); called once, from
+    /// applicationWillTerminate.
     func shutdown() {
         lock.withLock { cursorAllowed = false }
-        visionQueue.sync { [self] in postInteraction(interactionEngine.cancel()) }
+        visionQueue.sync { [self] in closeInteraction(interactionEngine.cancel()) }
     }
 
     func apply(_ settings: AirTrackSettings) {
@@ -125,7 +133,10 @@ final class HandTrackingPipeline: @unchecked Sendable {
             interactionEngine.apply(settings)
             scrollGesturesEnabled = settings.scrollGesturesEnabled
             scrollDirectionInverted = settings.scrollDirectionInverted
-            if !settings.scrollGesturesEnabled { postInteraction(interactionEngine.cancel()) }
+            clickGesturesEnabled = settings.clickGesturesEnabled
+            if !settings.scrollGesturesEnabled || !settings.clickGesturesEnabled {
+                closeInteraction(interactionEngine.cancel())
+            }
         }
     }
 
@@ -144,7 +155,7 @@ final class HandTrackingPipeline: @unchecked Sendable {
         visionQueue.async { [self] in
             pointerTracker.reset()
             cursorController.reset()
-            postInteraction(interactionEngine.reset())
+            closeInteraction(interactionEngine.reset())
             if lastHandCount > 0 { Log.tracking.info("Tracking reset") }
             lastHandCount = 0
             lastPointerMode = .lost
@@ -198,16 +209,22 @@ final class HandTrackingPipeline: @unchecked Sendable {
             Log.tracking.debug("Pointer \(tracked.pointer.mode.rawValue, privacy: .public)")
             lastPointerMode = tracked.pointer.mode
         }
-        // PHASE 3A: the interaction engine sees every frame. Its output reaches macOS only while
-        // cursor control is allowed and scroll gestures are enabled; otherwise it only observes
-        // (3A-1 shadow mode) and the cursor path is exactly Phase 2.1.
-        let live = lock.withLock { cursorAllowed } && scrollGesturesEnabled
-        let interaction = interactionEngine.update(pointer: tracked.pointer, trackedHand: tracked.trackedHand, emitsActions: live)
-        // Cursor freeze is a policy ABOVE CursorController (never modified): while a gesture owns
-        // the hand the controller is not fed and is reset, so the cursor returns afterwards with
-        // the existing Phase 2.1 reacquisition glide from wherever the cursor is.
-        let frozen = live && interaction.cursorPolicy == .frozen
-        let cursor = updateCursor(pointer: tracked.pointer, frozen: frozen)
+        // PHASE 3A / 3B: the interaction engine sees every frame. A family's output reaches macOS
+        // only while cursor control is allowed and that family is enabled; otherwise it only
+        // observes (shadow mode) and the cursor path is exactly Phase 2.1.
+        let allowed = lock.withLock { cursorAllowed }
+        var outputs: InteractionOutputs = []
+        if allowed, scrollGesturesEnabled { outputs.insert(.scroll) }
+        if allowed, clickGesturesEnabled { outputs.insert(.pointerButton) }
+        let interaction = interactionEngine.update(pointer: tracked.pointer, trackedHand: tracked.trackedHand, outputs: outputs)
+        // Button actions first: a click or a mouseDown lands where the cursor is NOW (frozen
+        // while the pinch was pending), before this frame moves anything.
+        postButtons(interaction.actions)
+        // Cursor policies sit ABOVE CursorController (never modified). Frozen: the controller is
+        // not fed and is reset, so the cursor returns with the Phase 2.1 reacquisition glide.
+        // Drag: the controller maps the index and DragController moves the cursor.
+        let cursor = updateCursor(pointer: tracked.pointer, policy: interaction.appliedCursorPolicy,
+                                  dragFollowsIndex: interaction.pinch.dragFollowsIndex)
         postInteraction(interaction.actions)
         onResult?(TrackingResult(
             hands: hands,
@@ -216,7 +233,8 @@ final class HandTrackingPipeline: @unchecked Sendable {
             pointer: tracked.pointer,
             imageAspectRatio: frame.aspectRatio,
             interaction: interaction,
-            cursor: cursor
+            cursor: cursor,
+            primaryButtonDown: dragController.isButtonDown
         ))
 
         let snapshot = lock.withLock { () -> TrackingMetrics? in
@@ -232,12 +250,17 @@ final class HandTrackingPipeline: @unchecked Sendable {
         if let snapshot { onMetrics?(snapshot) }
     }
 
-    /// visionQueue. Moves the system cursor only for a trusted pointer while allowed.
-    private func updateCursor(pointer: PointerObservation, frozen: Bool) -> CursorUpdate? {
-        guard lock.withLock({ cursorAllowed }), !frozen else {
+    /// visionQueue. Moves the system cursor only for a trusted pointer while allowed. One
+    /// writer per frame: CursorController (follow) or DragController (drag), never both.
+    private func updateCursor(pointer: PointerObservation, policy: CursorPolicy, dragFollowsIndex: Bool) -> CursorUpdate? {
+        let allowed = lock.withLock { cursorAllowed }
+        // Invariant: the button is down only while an allowed drag owns the cursor.
+        if dragController.isButtonDown, !allowed || policy != .drag { releaseButton() }
+        guard allowed, policy != .frozen else {
             cursorController.reset()
             return nil
         }
+        if policy == .drag { return updateDrag(pointer: pointer, followsIndex: dragFollowsIndex) }
         // Only read the real cursor position when a new session starts (reacquisition).
         let startsSession = pointer.startsSession || cursorController.needsReferencePosition
         let reference = pointer.mode.providesPointer && startsSession ? events.currentCursorLocation() : nil
@@ -253,7 +276,72 @@ final class HandTrackingPipeline: @unchecked Sendable {
         return update
     }
 
-    /// visionQueue. Posts gesture actions. The engine only produces them while output is live,
+    /// visionQueue. PHASE 3B drag: the index goes through the Phase 2.1 mapping (active area,
+    /// mirror, dead zone, sensitivity, smoothing; no reacquisition blend) and DragController
+    /// adds the fixed anchor offset. Posted as leftMouseDragged, which also moves the cursor.
+    /// Nothing is posted without a fresh index (HOLD) or while the pinch is uncertain.
+    private func updateDrag(pointer: PointerObservation, followsIndex: Bool) -> CursorUpdate? {
+        let display = events.mainDisplayBounds()
+        let mapped = cursorController.update(pointer: pointer, display: display, isActive: true, currentCursor: nil)
+        guard followsIndex, let mapped,
+              let position = dragController.follow(index: mapped.normalized),
+              let screen = ScreenMapper.map(position, to: display)
+        else { return nil }
+        events.postLeftMouseDragged(to: screen)
+        // Report the drag position (the cursor's real position), keeping the mapping diagnostics.
+        var update = mapped
+        update.normalized = position
+        update.screen = screen
+        return update
+    }
+
+    /// visionQueue. PHASE 3B button actions, through the DragController ledger: a second
+    /// mouseDown is never sent, a mouseUp only after a mouseDown, and no click while the
+    /// button is held.
+    private func postButtons(_ actions: [InteractionAction]) {
+        for action in actions {
+            switch action {
+            case .leftClick:
+                guard !dragController.isButtonDown, let at = events.currentCursorLocation() else { continue }
+                events.postLeftClick(at: at)
+                Log.tracking.debug("Left click")
+            case .beginDrag:
+                let display = events.mainDisplayBounds()
+                guard display.isValid, let at = events.currentCursorLocation(),
+                      dragController.press(at: display.normalizedPosition(of: at))
+                else { continue }
+                events.postLeftMouseDown(at: at)
+                Log.tracking.debug("Drag began")
+            case .endDrag:
+                releaseButton()
+            case .scroll, .moveCursor, .mouseDown, .mouseDrag, .mouseUp:
+                break
+            }
+        }
+    }
+
+    /// visionQueue. mouseUp iff the ledger holds the button (idempotent), where the drag is.
+    /// The cursor then resumes with the Phase 2.1 reacquisition glide from the drop point.
+    private func releaseButton() {
+        guard let position = dragController.release() else { return }
+        let display = events.mainDisplayBounds()
+        let at = ScreenMapper.map(position, to: display)
+            ?? events.currentCursorLocation()
+            ?? Point2D(x: display.x, y: display.y)
+        events.postLeftMouseUp(at: at)
+        cursorController.reset()
+        Log.tracking.debug("Drag ended")
+    }
+
+    /// visionQueue. Ends every gesture and leaves nothing owed to macOS: closing scroll phases,
+    /// the drag's mouseUp, and a final ledger check so no path can leave the button down.
+    private func closeInteraction(_ closing: [InteractionAction]) {
+        postButtons(closing)
+        postInteraction(closing)
+        releaseButton()
+    }
+
+    /// visionQueue. Posts scroll actions. The engine only produces them while output is live,
     /// plus the closing phases when it is switched off, which are always safe to post.
     private func postInteraction(_ actions: [InteractionAction]) {
         guard !actions.isEmpty else { return }

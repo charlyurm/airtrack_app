@@ -1,14 +1,17 @@
 import Foundation
 
 /// Families own the interaction exclusively: one family at a time (IntentArbiter).
-/// PHASE 3A implements `scroll`; future families (pinch, rightClick, swipe…) are added here.
+/// PHASE 3A implements `scroll`, PHASE 3B `pinch` (left click / drag); future families
+/// (rightClick, zoom, swipe…) are added here.
 public enum GestureFamily: String, Equatable, Sendable {
     case scroll
+    /// PHASE 3B: index + thumb pinch → left click or drag (decided by PinchIntentController).
+    case pinch
 
     /// Whether a stable candidate of this family freezes the cursor before it commits.
     public var freezesCursor: Bool {
         switch self {
-        case .scroll: true
+        case .scroll, .pinch: true
         }
     }
 }
@@ -19,10 +22,13 @@ public enum GestureKind: String, Equatable, Hashable, Sendable, CaseIterable {
     case twoFingerScroll
     /// 🖐️ moving vertically.
     case openHandScroll
+    /// PHASE 3B: 🤏 index + thumb pinch (click if released in place, drag if moved while held).
+    case pinch
 
     public var family: GestureFamily {
         switch self {
         case .twoFingerScroll, .openHandScroll: .scroll
+        case .pinch: .pinch
         }
     }
 
@@ -30,6 +36,7 @@ public enum GestureKind: String, Equatable, Hashable, Sendable, CaseIterable {
         switch self {
         case .twoFingerScroll: .twoFinger
         case .openHandScroll: .openHand
+        case .pinch: .pinch
         }
     }
 
@@ -37,6 +44,7 @@ public enum GestureKind: String, Equatable, Hashable, Sendable, CaseIterable {
         switch self {
         case .twoFingerScroll: [.index, .middle]
         case .openHandScroll: [.index, .middle, .ring, .pinky]
+        case .pinch: [.thumb, .index]
         }
     }
 }
@@ -88,6 +96,10 @@ public struct RecognitionContext: Sendable {
     /// New gestures may start only with FULL tracking (strict features, fresh stable pose).
     /// PARTIAL / INDEX observations can only keep a gesture that is already committed.
     public var canInitiate: Bool = true
+    /// PHASE 3B: a pinch may start only if it was formed while nothing else owned the hand.
+    /// A pinch that ends a scroll (or stops its inertia) is part of that interaction, not a
+    /// click: it must open once before it can click (no global neutral pose, just a re-pinch).
+    public var pinchArmed: Bool = true
 }
 
 /// Stateless: all memory lives in the arbiter and the history, so recognizers are pure
@@ -169,6 +181,8 @@ public struct ScrollRecognizer: GestureRecognizer {
             let four = [index, middle, ring, pinky]
             let open = !four.contains(.bent) && four.filter { $0 == .extended }.count >= 2
             return open ? .supported : .uncertain
+        case .pinch:
+            return .uncertain // not a scroll kind (PinchGestureRecognizer keeps pinches)
         }
     }
 

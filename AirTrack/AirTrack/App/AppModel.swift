@@ -53,6 +53,8 @@ final class AppModel {
     private(set) var imageAspectRatio = 16.0 / 9.0
     /// PHASE 3A: interaction layer of the latest frame (debug panel).
     private(set) var interaction = InteractionFrame.idle(at: 0)
+    /// PHASE 3B: the primary mouse button is held by a drag (pipeline ledger, debug panel).
+    private(set) var primaryButtonDown = false
     @ObservationIgnored private var activationObserver: NSObjectProtocol?
 
     let camera: CameraManager
@@ -141,7 +143,7 @@ final class AppModel {
         camera.stop()
     }
 
-    /// App termination: release any live gesture output (no scroll left open).
+    /// App termination: release any live gesture output (no scroll left open, no button held).
     func shutdown() {
         pipeline.shutdown()
     }
@@ -238,6 +240,7 @@ final class AppModel {
             hands = []
             pointer = .lost(at: 0)
             interaction = .idle(at: 0)
+            primaryButtonDown = false
             candidateCount = 0
             rejections = []
         }
@@ -259,6 +262,7 @@ final class AppModel {
         if pointer.mode != .lost, result.pointer.mode == .lost { pointerLosses += 1 }
         pointer = result.pointer
         interaction = result.interaction
+        primaryButtonDown = result.primaryButtonDown
         if result.imageAspectRatio.isFinite, result.imageAspectRatio > 0 { imageAspectRatio = result.imageAspectRatio }
         if !result.hands.isEmpty { hasSeenHand = true }
     }
@@ -271,6 +275,7 @@ final class AppModel {
         cursor = nil
         pointer = .lost(at: 0)
         interaction = .idle(at: 0)
+        primaryButtonDown = false
         bridgedGaps = 0
         pointerLosses = 0
         metrics = TrackingMetrics()

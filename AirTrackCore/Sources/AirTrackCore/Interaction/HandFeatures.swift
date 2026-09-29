@@ -69,6 +69,9 @@ public struct HandFeatures: Equatable, Sendable {
     public var thumbIndexDistance: Double?
     public var thumbMiddleDistance: Double?
     public var indexMiddleDistance: Double?
+    /// PHASE 3B: weakest confidence of the thumb and index tips (nil when a tip is missing):
+    /// how much the pinch distance can be trusted.
+    public var pinchConfidence: Double?
     /// Joints available (0…21), a visibility summary.
     public var visibleJoints: Int
 
@@ -177,6 +180,9 @@ public enum HandFeatureExtractor {
             thumbIndexDistance: tipDistance(.thumbTip, .indexTip),
             thumbMiddleDistance: tipDistance(.thumbTip, .middleTip),
             indexMiddleDistance: tipDistance(.indexTip, .middleTip),
+            pinchConfidence: point(.thumbTip) != nil && point(.indexTip) != nil
+                ? min(hand.landmarks[.thumbTip]?.confidence ?? 0, hand.landmarks[.indexTip]?.confidence ?? 0)
+                : nil,
             visibleJoints: hand.landmarks.values.filter { $0.confidence >= c.minimumJointConfidence && $0.position.isFinite }.count
         )
     }

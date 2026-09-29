@@ -76,11 +76,14 @@ final class InteractionEngineTests: XCTestCase {
         XCTAssertEqual(frames.last?.pose, .pointing)
     }
 
-    func testPinchAndFourFingersAreRecognizedButDoNothingYet() {
+    /// PHASE 3B: the pinch became a gesture (click / drag). In shadow mode it is recognized but
+    /// still does nothing: no action, and the cursor policy is never applied.
+    func testPinchInShadowAndFourFingersAreRecognizedButDoNothing() {
         var engine = InteractionEngine()
         let pinch = InteractionScenario.moving(&engine, extended: TestPoses.pointing, thumb: .pinching, step: Point2D(x: 0, y: 0.01), frames: 0..<6)
         XCTAssertEqual(pinch.last?.pose, .pinch)
-        XCTAssertTrue(pinch.allSatisfy { $0.intent == nil && $0.cursorPolicy == .follow })
+        XCTAssertEqual(pinch.last?.intent, .pinch)
+        XCTAssertTrue(pinch.allSatisfy { $0.actions.isEmpty && $0.appliedCursorPolicy == .follow })
         var engine2 = InteractionEngine()
         let four = InteractionScenario.moving(&engine2, extended: TestPoses.fourFingers, thumb: .folded, step: Point2D(x: 0.01, y: 0), frames: 0..<6)
         XCTAssertEqual(four.last?.pose, .fourFinger)
@@ -177,7 +180,9 @@ final class InteractionEngineTests: XCTestCase {
         XCTAssertEqual(back.last?.intent, nil)
         XCTAssertEqual(back.last?.cursorPolicy, .follow)
         XCTAssertEqual(run(TestPoses.pointing, .pinching, dy: 0, count: 4).last?.pose, .pinch)
-        XCTAssertNotNil(firstIntentFrame(run(TestPoses.twoFingers, dy: 0.01, count: 6)), "scroll again, no reset needed")
+        // PHASE 3B: the pinch is now an intent of its own; opening it into two fingers ends it.
+        let again = run(TestPoses.twoFingers, dy: 0.01, count: 6)
+        XCTAssertEqual(again.last?.intent, .twoFingerScroll, "scroll again, no reset needed")
     }
 
     // MARK: Shadow mode safety

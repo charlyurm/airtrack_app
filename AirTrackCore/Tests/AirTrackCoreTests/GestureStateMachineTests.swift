@@ -46,7 +46,7 @@ final class GestureStateMachineTests: XCTestCase {
             case .mouseDown: downs += 1
             case .mouseDrag: drags += 1
             case .mouseUp: ups += 1
-            case .moveCursor, .scroll: break
+            case .moveCursor, .scroll, .leftClick, .beginDrag, .endDrag: break
             }
         }
         return (downs, drags, ups)
@@ -56,8 +56,8 @@ final class GestureStateMachineTests: XCTestCase {
         switch action {
         case let .moveCursor(to), let .mouseDrag(to): return to
         case let .mouseDown(at, _), let .mouseUp(at, _): return at
-        case .scroll:
-            XCTFail("the Phase 0 state machine never scrolls")
+        case .scroll, .leftClick, .beginDrag, .endDrag:
+            XCTFail("the Phase 0 state machine never produces Phase 3 actions")
             return .zero
         }
     }

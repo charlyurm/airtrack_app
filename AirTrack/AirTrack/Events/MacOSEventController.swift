@@ -2,7 +2,9 @@ import AirTrackCore
 import CoreGraphics
 
 /// The only place AirTrack talks to the system cursor. PHASE 2: move. PHASE 3A-2: scroll.
-/// Deliberately no mouseDown / mouseUp / click / drag yet (PHASE 3B+).
+/// PHASE 3B: primary-button click, mouseDown / dragged / mouseUp. It posts; it does not decide:
+/// which button events are owed (and that every mouseDown gets its mouseUp) is tracked by the
+/// pipeline's DragController ledger.
 ///
 /// Coordinates: CoreGraphics global display space — origin at the top-left of the main
 /// display, y down, in points (logical, Retina-independent). Same convention as
@@ -39,18 +41,57 @@ final class MacOSEventController: Sendable {
         event?.post(tap: .cghidEventTap)
     }
 
-    /// Posts the semantic actions of the interaction engine. Only `.scroll` is implemented in
-    /// PHASE 3A; the mouse-button cases are never produced by the engine yet and are ignored
-    /// here on purpose, so no click can reach macOS before PHASE 3B.
+    /// Posts the scroll actions of the interaction engine. PHASE 3B button actions need
+    /// positions and the button ledger, so the pipeline posts them through the primary-button
+    /// methods below; the legacy Phase 0 mouse cases are never produced and are ignored.
     func post(_ actions: [InteractionAction], invertScroll: Bool) {
         for action in actions {
             switch action {
             case let .scroll(scroll):
                 postScroll(scroll, inverted: invertScroll)
-            case .moveCursor, .mouseDown, .mouseDrag, .mouseUp:
+            case .moveCursor, .mouseDown, .mouseDrag, .mouseUp, .leftClick, .beginDrag, .endDrag:
                 break
             }
         }
+    }
+
+    /// One left click at `point`: leftMouseDown + leftMouseUp with click state 1 (a single
+    /// click; nothing here ever sends click state 2, so no double click is synthesized).
+    func postLeftClick(at point: Point2D) {
+        guard point.isFinite else { return }
+        postMouse(.leftMouseDown, at: point)
+        postMouse(.leftMouseUp, at: point)
+    }
+
+    /// Primary button down (drag start).
+    func postLeftMouseDown(at point: Point2D) {
+        postMouse(.leftMouseDown, at: point)
+    }
+
+    /// Movement with the primary button held. macOS delivers pointer motion with a button down
+    /// as `leftMouseDragged` (a plain mouseMoved would not drag anything); it also moves the
+    /// cursor, so during a drag this is the only cursor writer.
+    func postLeftMouseDragged(to point: Point2D) {
+        postMouse(.leftMouseDragged, at: point)
+    }
+
+    /// Primary button up (drag end, or the safety release).
+    func postLeftMouseUp(at point: Point2D) {
+        postMouse(.leftMouseUp, at: point)
+    }
+
+    /// Public CGEvent mouse API. Synthetic events approximate a physical click / drag; they
+    /// are not identical to a real trackpad (e.g. no pressure, no force click).
+    private func postMouse(_ type: CGEventType, at point: Point2D) {
+        guard point.isFinite else { return }
+        guard let event = CGEvent(
+            mouseEventSource: nil,
+            mouseType: type,
+            mouseCursorPosition: CGPoint(x: point.x, y: point.y),
+            mouseButton: .left
+        ) else { return }
+        event.setIntegerValueField(.mouseEventClickState, value: 1)
+        event.post(tap: .cghidEventTap)
     }
 
     /// One scroll step as a continuous, pixel-based scroll-wheel event with trackpad-style

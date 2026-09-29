@@ -9,7 +9,7 @@ struct TrackingStatusView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("AirTrack").font(.title2.bold())
-                Text("PHASE 3A · Cursor + scroll debug").font(.caption).foregroundStyle(.secondary)
+                Text("PHASE 3B · Cursor + scroll + click/drag debug").font(.caption).foregroundStyle(.secondary)
 
                 section("Estado") {
                     row("Camera", model.cameraStatus.label, color: cameraColor)
@@ -36,6 +36,7 @@ struct TrackingStatusView: View {
                 cursorSection
 
                 gestureSection
+                clickDragSection
 
                 permissionSection
 
@@ -191,7 +192,7 @@ struct TrackingStatusView: View {
         .font(.caption)
     }
 
-    // MARK: Gestures (PHASE 3A)
+    // MARK: Gestures (PHASE 3A; the pinch intent shows here too)
 
     private var gestureSection: some View {
         let i = model.interaction
@@ -211,8 +212,8 @@ struct TrackingStatusView: View {
             row("Mantenimiento", i.maintenance?.rawValue.uppercased() ?? "—",
                 color: i.maintenance == .supported ? .green : (i.maintenance == nil ? .secondary : .orange))
             row("Vel. vertical", String(format: "%+.2f esc/s", i.verticalVelocity))
-            row("Cursor policy", i.cursorPolicy == .frozen ? "FROZEN" : "FOLLOW",
-                color: i.cursorPolicy == .frozen ? .orange : .primary)
+            row("Cursor policy", cursorPolicyLabel(i),
+                color: i.appliedCursorPolicy == .follow ? .primary : .orange)
             row("Scroll", scrollStateLabel(i), color: i.scrollState == .idle ? .secondary : .green)
             row("Scroll speed", String(format: "%.0f pt/s", i.scrollSpeed))
             row("Scroll delta", "\(i.scrollDelta) pt")
@@ -220,6 +221,63 @@ struct TrackingStatusView: View {
             Toggle("Invertir dirección del scroll", isOn: settingBinding(\.scrollDirectionInverted))
             Text("E = extendido · B = doblado · ? = incierto. Escala y velocidad en tamaños de mano. Scroll: ☝️🖕 o 🖐️ moviendo en vertical; el cursor se congela mientras dura. Sin «Scroll con gestos» (o sin Cursor Control) solo se observa: no se envía nada.")
                 .font(.caption2).foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: Click / drag (PHASE 3B)
+
+    private var clickDragSection: some View {
+        let i = model.interaction
+        let p = i.pinch
+        return section("Click / drag (PHASE 3B)") {
+            row("Pinch ratio", format(p.distance, "%.2f"), color: p.phase == .pending || p.phase == .dragging ? .green : .primary)
+            row("Pinch confianza", format(p.confidence, "%.2f"))
+            row("Pinch", pinchPhaseLabel(p), color: p.phase == .none ? .secondary : .green)
+            row("Intent", clickDragIntentLabel(p), color: p.phase == .dragging ? .orange : .primary)
+            row("Movimiento", String(format: "%.2f / %.2f esc", p.movement, p.dragThreshold),
+                color: p.movement >= p.dragThreshold ? .orange : .primary)
+            row("Último resultado", p.outcome.map(outcomeLabel) ?? "—")
+            row("Lifecycle", i.lifecycle.rawValue.uppercased())
+            row("Botón izquierdo", model.primaryButtonDown ? "DOWN" : "UP", color: model.primaryButtonDown ? .orange : .secondary)
+            row("Tracking", i.trackingMode.rawValue.uppercased())
+            Toggle("Click y arrastre con gestos", isOn: settingBinding(\.clickGesturesEnabled))
+            Text("🤏 índice + pulgar: soltar en el sitio = click; mantener y mover = arrastrar (el objeto sigue al índice). Durante el pinch el cursor se congela para que el click caiga donde apuntabas. Sin «Click y arrastre» (o sin Cursor Control) solo se observa.")
+                .font(.caption2).foregroundStyle(.secondary)
+        }
+    }
+
+    private func cursorPolicyLabel(_ i: InteractionFrame) -> String {
+        let label = switch i.cursorPolicy {
+        case .follow: "FOLLOW"
+        case .frozen: "FROZEN"
+        case .drag: "DRAG"
+        }
+        return i.cursorPolicy != .follow && i.appliedCursorPolicy == .follow ? label + " · SHADOW" : label
+    }
+
+    private func pinchPhaseLabel(_ p: PinchStatus) -> String {
+        let label = switch p.phase {
+        case .none: p.armed ? "NONE" : "NONE · re-pinch needed"
+        case .candidate: "CANDIDATE"
+        case .pending: "CONFIRMED"
+        case .dragging: "DRAG_ACTIVE"
+        }
+        return p.phase == .pending || p.phase == .dragging ? label + (p.live ? " · LIVE" : " · SHADOW") : label
+    }
+
+    private func clickDragIntentLabel(_ p: PinchStatus) -> String {
+        switch p.phase {
+        case .none, .candidate: "—"
+        case .pending: "CLICK / DRAG PENDING"
+        case .dragging: p.dragFollowsIndex ? "DRAG (sigue al índice)" : "DRAG (en espera)"
+        }
+    }
+
+    private func outcomeLabel(_ outcome: PinchOutcome) -> String {
+        switch outcome {
+        case .click: "CLICK"
+        case .dragEnded: "DRAG END (mouseUp)"
+        case .noAction: "SIN ACCIÓN"
         }
     }
 
@@ -258,6 +316,7 @@ struct TrackingStatusView: View {
         switch kind {
         case .twoFingerScroll: "SCROLL 2 dedos"
         case .openHandScroll: "SCROLL mano abierta"
+        case .pinch: "PINCH 🤏"
         }
     }
 

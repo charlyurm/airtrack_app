@@ -5,7 +5,8 @@ import Foundation
 /// Positions are normalized DISPLAY coordinates: 0...1, origin top-left,
 /// y down. The macOS layer converts them with `ScreenMapper` and posts
 /// one CGEvent per action. `clickCount` maps to kCGMouseEventClickState.
-/// The mouse cases belong to the Phase 0 click/drag state machine (not wired; PHASE 3B+).
+/// `moveCursor` / `mouseDown` / `mouseDrag` / `mouseUp` belong to the legacy Phase 0 click/drag
+/// state machine (GestureEngine): never wired, ignored by the macOS adapter.
 public enum InteractionAction: Equatable, Sendable {
     case moveCursor(to: Point2D)
     case mouseDown(at: Point2D, clickCount: Int)
@@ -13,6 +14,14 @@ public enum InteractionAction: Equatable, Sendable {
     case mouseUp(at: Point2D, clickCount: Int)
     /// PHASE 3A-2: one scroll step (gesture or momentum), see `ScrollAction`.
     case scroll(ScrollAction)
+    /// PHASE 3B: one primary-button click (down + up, click count 1) where the cursor is.
+    /// Positions are the macOS side's: the Core never maps cursor coordinates.
+    case leftClick
+    /// PHASE 3B: primary button down where the cursor is; the drag starts (DragController
+    /// anchors it and moves it with the index).
+    case beginDrag
+    /// PHASE 3B: primary button up where the drag is. Always paired with one `beginDrag`.
+    case endDrag
 }
 
 /// Phase of a direct (finger-driven) scroll gesture, like a trackpad's.

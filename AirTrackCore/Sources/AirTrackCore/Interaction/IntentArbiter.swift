@@ -84,6 +84,8 @@ public struct IntentArbiter: Sendable {
         public var committed: Bool = false
         /// The owner was released this frame, and why.
         public var released: ReleaseReason?
+        /// PHASE 3B: which gesture was released this frame (its family decides the output).
+        public var releasedKind: GestureKind?
         /// The release happened while the gesture was still recently supported (inertia OK).
         public var releasedFresh: Bool = false
         /// The owner is supported this frame (it may produce output).
@@ -139,7 +141,7 @@ public struct IntentArbiter: Sendable {
 
     private mutating func updateOwned(_ current: GestureKind, candidates: [GestureCandidate], availability: FeatureAvailability, now: TimeInterval) -> Decision {
         if availability == .lost {
-            return release(reason: .trackingLost, fresh: false)
+            return release(current, reason: .trackingLost, fresh: false)
         }
         var evidence = MaintenanceEvidence.uncertain
         if availability == .available || availability == .limited,
@@ -149,7 +151,7 @@ public struct IntentArbiter: Sendable {
         let supportedAt = lastSupportedAt ?? now
         switch evidence {
         case .contradicted:
-            var decision = release(reason: .gestureEnded, fresh: now - supportedAt <= configuration.freshReleaseWindow)
+            var decision = release(current, reason: .gestureEnded, fresh: now - supportedAt <= configuration.freshReleaseWindow)
             decision.maintenance = .contradicted
             return decision
         case .supported:
@@ -158,7 +160,7 @@ public struct IntentArbiter: Sendable {
             return Decision(lifecycle: lifecycle, owner: current, held: true, maintenance: .supported)
         case .uncertain:
             if now - supportedAt > configuration.maintenanceGrace {
-                var decision = release(reason: .recognitionTimeout, fresh: false)
+                var decision = release(current, reason: .recognitionTimeout, fresh: false)
                 decision.maintenance = .uncertain
                 return decision
             }
@@ -207,12 +209,12 @@ public struct IntentArbiter: Sendable {
         candidateSince = nil
     }
 
-    private mutating func release(reason: ReleaseReason, fresh: Bool) -> Decision {
+    private mutating func release(_ kind: GestureKind, reason: ReleaseReason, fresh: Bool) -> Decision {
         owner = nil
         candidateKind = nil
         candidateSince = nil
         lastSupportedAt = nil
         lifecycle = .releasing
-        return Decision(lifecycle: lifecycle, owner: nil, released: reason, releasedFresh: fresh)
+        return Decision(lifecycle: lifecycle, owner: nil, released: reason, releasedKind: kind, releasedFresh: fresh)
     }
 }

@@ -35,6 +35,12 @@ public struct AirTrackSettings: Equatable, Sendable, Codable {
     /// PHASE 3A-2: flips the sign the macOS adapter uses. The Core always means "content
     /// follows the hand"; whether synthetic events need flipping is settled on the real Mac.
     public var scrollDirectionInverted: Bool = false
+    /// PHASE 3B: index + thumb pinch → left click / drag reaches macOS. Off = the pinch is only
+    /// observed (shadow mode) and the cursor behaves exactly as without it. The thresholds are
+    /// not user settings yet: defaults first, customization after physical validation.
+    public var clickGesturesEnabled: Bool = true
+    /// LEGACY Phase 0 (GestureEngine, not wired). PHASE 3B uses PoseConfiguration / Pinch*
+    /// configurations in hand-scale units of the Phase 3 feature extractor instead.
     /// Pinch start threshold, as a ratio of hand size (see HandScale).
     /// Initial, UNCALIBRATED value — validate with the real camera.
     public var pinchThreshold: Double = 0.25
