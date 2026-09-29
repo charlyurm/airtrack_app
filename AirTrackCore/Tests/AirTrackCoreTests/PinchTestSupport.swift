@@ -112,6 +112,14 @@ extension Array where Element == InteractionFrame {
     var dragBegins: Int { filter(\.beginsDrag).count }
     var dragEnds: Int { filter(\.endsDrag).count }
     var buttonActions: [InteractionAction] {
-        flatMap(\.actions).filter { $0 == .leftClick || $0 == .beginDrag || $0 == .endDrag }
+        let all: [InteractionAction] = flatMap(\.actions)
+        return all.filter(isButtonAction)
+    }
+}
+
+private func isButtonAction(_ action: InteractionAction) -> Bool {
+    switch action {
+    case .leftClick, .beginDrag, .endDrag: true
+    case .scroll, .moveCursor, .mouseDown, .mouseDrag, .mouseUp: false
     }
 }
