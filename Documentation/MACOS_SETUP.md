@@ -66,7 +66,7 @@ Lógica pura (solo Foundation). La app lo consume como paquete local
 
 ```bash
 cd AirTrackCore
-swift test          # esperado: Executed 176 tests, with 0 failures
+swift test          # esperado: Executed 229 tests, with 0 failures
 ```
 
 ## F. Abrir el proyecto
@@ -168,6 +168,11 @@ fuera del rectángulo discontinuo el cursor quede en el borde.
 
 Para soltar el cursor: saca la mano del cuadro, pulsa **Pausar** (⌃⌥⌘A con AirTrack en
 primer plano) o apaga Cursor Control.
+
+**PHASE 2.1:** pruebas A–N (incluye M, smoothing adaptativo, y N, índice periférico) en
+`PHASE2_1_RESULT.md` §9. En el panel: "Pointer" (FULL/PARTIAL/INDEX/HOLD/LOST), "Finger
+speed", "Smoothing now" y "Gaps bridged / losses". En el preview, un anillo marca el índice
+que mueve el cursor (verde FULL, amarillo PARTIAL, naranja INDEX).
 
 ## N. Logs
 

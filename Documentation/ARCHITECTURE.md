@@ -26,15 +26,20 @@ CoreGraphics ni SwiftUI. El job de Linux del CI falla si alguien rompe esta regl
 macOS / Vision  ──HandState──▶  AirTrackCore  ──CursorUpdate (PHASE 2) / [InteractionAction] (PHASE 3+)──▶  MacOSEventController
 ```
 
-## Pipeline del cursor (PHASE 2)
+## Pipeline del cursor (PHASE 2 + 2.1)
 
 ```text
-HandPresenceFilter → [HandState] (primaria primero, solo del frame actual)
+candidatos [HandState] del frame
    │  visionQueue, mismo hilo que Vision: sin colas ni timers nuevos
    ▼
+PointerTracker (Core, PHASE 2.1)
+   HandPresenceFilter (estricto, sin cambios) → hands (overlay/UI)
+   + continuidad de la mano ya establecida → PointerObservation
+     FULL | PARTIAL | INDEX CONTINUITY | HOLDING | LOST
+   ▼
 CursorController (Core)
-   hands.first → indexTip (conf ≥ 0.3) → espejo → active area → DeadZoneFilter
-   → sensibilidad → CursorSmoother (EMA) → blend de reacquisición → ScreenMapper
+   indexTip del puntero → espejo → active area → DeadZoneFilter → sensibilidad
+   → AdaptiveCursorSmoother (tiempo + velocidad) → blend de reacquisición → ScreenMapper
    ▼  CursorUpdate? (nil = no mover)
 MacOSEventController → CGEvent(.mouseMoved).post(.cghidEventTap)
 ```
@@ -43,15 +48,24 @@ MacOSEventController → CGEvent(.mouseMoved).post(.cghidEventTap)
   permiso de Accesibilidad concedido y cámara en `RUNNING` (`HandTrackingPipeline.setCursorControl`).
   Si no, el controlador se reinicia en cada frame y no se publica nada.
 - **Estado para la UI:** `CursorControlState` = off / paused / waitingForPermission / waitingForHand / active.
+  Con PHASE 2.1, "hay mano" = manos estrictas **o** un puntero establecido (partial/index/hold).
 - **Pantalla:** `CGDisplayBounds(CGMainDisplayID())`, en coordenadas globales CG (puntos,
   origen arriba-izquierda, Y hacia abajo), la misma convención que `ScreenMapper`. Solo la
   pantalla principal.
-- **Sin datos obsoletos:** un frame sin mano primaria válida devuelve `nil` y borra el
-  smoothing, la dead zone y el blend. La siguiente sesión parte de la posición real del cursor
-  (`CGEvent(source: nil).location`) y se desliza hacia el dedo en 0.2 s.
+- **Smoothing adaptativo (2.1):** filtro de primer orden con constante de tiempo
+  `tau = tauReposo / (1 + speedResponse · v)`, `v` en pantallas/s. Quieto o lento → mucho
+  suavizado; rápido → casi nada, con lag acotado. Salida = combinación convexa de la salida
+  anterior y la entrada: sin overshoot ni oscilación. Basado en tiempo (igual a 30 o 60 fps).
+- **Puntero periférico (2.1):** la adquisición sigue siendo estricta. Solo después, una
+  observación parcial de la MISMA mano (continuidad, confianza, chirality, geometría, tamaño,
+  coherencia, límites de tiempo) mantiene el cursor. Detalle en `PHASE2_1_RESULT.md`.
+- **Sin datos obsoletos:** `HOLDING` (hueco ≤ 0.15 s) devuelve `nil` y conserva la sesión: el
+  cursor queda quieto, sin extrapolar. `LOST` devuelve `nil` y borra smoothing, dead zone y
+  blend. La siguiente sesión parte de la posición real del cursor
+  (`CGEvent(source: nil).location`) y se desliza hacia el dedo (0.2 s por defecto).
 - `GestureEngine` (pinch/click) sigue sin conectar; PHASE 3 lo compondrá con `CursorController`.
 
-Detalle completo: `PHASE2_RESULT.md`.
+Detalle completo: `PHASE2_RESULT.md` y `PHASE2_1_RESULT.md`.
 
 ## Pipeline de PHASE 1 / 1.1
 
@@ -90,13 +104,13 @@ En PHASE 1 `HandState` todavía no pasa por `GestureEngine`: no hay cursor ni ev
 | `Permissions/CameraPermissionManager.swift` | Permiso de cámara |
 | `Vision/VisionHandTrackingEngine.swift` | Petición de Vision (hasta 2 manos) → candidatos |
 | `Vision/HandStateMapper.swift` | Tabla explícita Vision → `HandJoint` y conversión a `HandState` |
-| `Vision/HandTrackingPipeline.swift` | Buzón latest-frame-wins, filtro de presencia, cursor (PHASE 2), métricas, logs |
+| `Vision/HandTrackingPipeline.swift` | Buzón latest-frame-wins, `PointerTracker` (filtro de presencia + continuidad, 2.1), cursor (PHASE 2), métricas, logs |
 | `Events/MacOSEventController.swift` | Pantalla principal, posición actual del cursor, `CGEvent .mouseMoved` (**solo mover**) |
 | `Permissions/AccessibilityPermissionManager.swift` | Permiso de Accesibilidad (comprobar, pedir una vez, abrir Configuración) |
 | `App/AppModel.swift` | Estado de la UI (`@MainActor @Observable`) |
 | `UI/CameraPreviewView.swift` | Solo video (`AVCaptureVideoPreviewLayer`, `.resizeAspect`, espejo) |
-| `UI/HandDebugOverlay.swift` | Landmarks en SwiftUI `Canvas`, un color por dedo |
-| `UI/TrackingStatusView.swift` | Panel de diagnóstico + sección Cursor (interruptor, estado, permiso, pausa ⌃⌥⌘A, sliders) |
+| `UI/HandDebugOverlay.swift` | Landmarks en SwiftUI `Canvas`, un color por dedo; (2.1) anillo en el índice que mueve el cursor: verde FULL, amarillo PARTIAL, naranja INDEX |
+| `UI/TrackingStatusView.swift` | Panel de diagnóstico + sección Cursor (interruptor, estado, permiso, pausa ⌃⌥⌘A, sliders; 2.1: modo del puntero, confianza del índice, velocidad, smoothing efectivo, huecos/pérdidas, speed response, glide, peripheral tracking) |
 
 ## Identidad de los landmarks (tabla explícita)
 
@@ -171,6 +185,10 @@ documentado) y la transformación es una función pura con tests (`PreviewGeomet
 4. **Nunca hay datos obsoletos:** la salida se construye solo con el frame actual. Si
    Vision falla o no hay mano válida, se devuelven 0 manos; jamás las del frame anterior.
 
+PHASE 2.1: este filtro no cambia. `PointerTracker` lo envuelve y, **solo para el cursor**,
+permite que una mano ya adquirida continúe en modo parcial cerca de los bordes (ver
+"Pipeline del cursor"). El overlay y el conteo de manos siguen usando la salida estricta.
+
 `chirality` (L/R) la reporta Vision y AirTrack no la valida.
 
 ## Frames: latest-frame-wins
@@ -200,7 +218,7 @@ camera (30 fps) ─▶ ¿Vision libre? ── sí ─▶ procesar ya
 MAIN (MainActor)   SwiftUI, AppModel, overlay (Canvas)
 sessionQueue       configuración de AVCaptureSession, startRunning/stopRunning (bloqueantes)
 videoQueue         callbacks de AVCaptureVideoDataOutput → HandTrackingPipeline.submit
-visionQueue        Vision + HandPresenceFilter → TrackingResult
+visionQueue        Vision + PointerTracker (HandPresenceFilter) + CursorController → TrackingResult
 → main             DispatchQueue.main.async + MainActor.assumeIsolated (conserva el orden)
 ```
 
@@ -225,14 +243,16 @@ visionQueue        Vision + HandPresenceFilter → TrackingResult
 |---|---|
 | `Models/` | `HandJoint`, `Finger`, `HandSkeleton`, `HandChirality`, `HandState`, `InteractionAction`, `AirTrackSettings`, `KeyboardShortcut`, `LandmarkCoordinateConversion` |
 | `Geometry/` | `Point2D`, `Rect2D`, `PreviewGeometry` |
-| `Tracking/` | `HandValidation`, `HandPresenceFilter`, `HandOrdering` |
-| `Cursor/` | `CursorController`, `CursorControlState`, `DeadZoneFilter`, `CursorMapper`, `CursorSmoother`, `ScreenMapper` |
+| `Tracking/` | `HandValidation`, `HandPresenceFilter`, `HandOrdering`, `PointerTracker` (+ `PointerTrackingMode`, `PointerObservation`, `PointerTrackingConfiguration`) |
+| `Cursor/` | `CursorController`, `CursorControlState`, `DeadZoneFilter`, `CursorMapper`, `AdaptiveCursorSmoother`, `CursorSmoother` (EMA fija, referencia y `GestureEngine`), `ScreenMapper` |
 | `Gestures/` | `HandScale`, `PinchRecognizer`, `GestureStateMachine`, `GestureEngine` |
 | `Calibration/` | `ActiveAreaCalibration` |
 
 ## Reglas de seguridad
 
 - Nunca se inventan landmarks ni se reutilizan los de un frame anterior.
+- (2.1) Una detección parcial desconocida nunca activa el cursor; el modo degradado solo
+  continúa una mano adquirida en modo estricto, con límites de tiempo, y no extrapola.
 - Sin permiso de cámara, la app arranca igual y muestra cómo concederlo.
 - Una cámara desconectada muestra `DISCONNECTED`, no `ERROR`.
 - Cerrar la ventana cierra la app, así que la cámara no queda encendida.
@@ -251,8 +271,11 @@ visionQueue        Vision + HandPresenceFilter → TrackingResult
 | Buzón latest-frame-wins de 1 plaza | Latencia acotada, sin colas | 1.1 |
 | Vision clásico (`VNDetectHumanHandPoseRequest`) | Compatible con macOS 14 | Revisable |
 | Firma ad-hoc + entitlement de cámara, sin sandbox | Ejecución local | MVP |
-| Latencia del pinch en 2 frames, EMA por frame | Ver `GESTURES.md` | Provisional |
+| Latencia del pinch en 2 frames, EMA por frame (GestureEngine) | Ver `GESTURES.md` | Provisional |
 | Cursor en la cola de Vision, con `CGEvent .mouseMoved` (no `CGWarpMouseCursorPosition`) | Mínima latencia; las apps reciben eventos de movimiento normales | PHASE 2 |
 | Dead zone con ancla antes de la sensibilidad | Estabilidad sin retraso durante el movimiento; el umbral no depende de la sensibilidad | PHASE 2, umbral sin calibrar |
 | Recuperación con blend desde el cursor real | Sin saltos y sin datos obsoletos | PHASE 2 |
 | Cursor Control apagado al arrancar | Detectar una mano nunca mueve el cursor por sí solo | PHASE 2 |
+| Smoothing adaptativo por velocidad y basado en tiempo (familia 1€) en lugar de EMA fija por frame | La EMA fija obliga a elegir entre jitter y lag; la adaptativa da las dos cosas | PHASE 2.1, parámetros sin calibrar |
+| `PointerTracker` separado de `HandPresenceFilter` | La adquisición estricta no cambia; la continuidad degradada solo afecta al cursor | PHASE 2.1 |
+| HOLD breve (≤ 0.15 s) en vez de pérdida inmediata | Un frame perdido (blur) ya no reinicia el cursor ni repite el gate de 2 frames | PHASE 2.1 |

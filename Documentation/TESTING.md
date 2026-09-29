@@ -7,7 +7,7 @@ cd AirTrackCore
 swift test
 ```
 
-Total: **176 tests** en 13 suites (85 hasta PHASE 1 + 47 de PHASE 1.1 + 44 de PHASE 2).
+Total: **229 tests** en 16 suites (85 hasta PHASE 1 + 47 de PHASE 1.1 + 44 de PHASE 2 + 53 de PHASE 2.1).
 
 | Suite | Tests | Cubre |
 |---|---|---|
@@ -21,8 +21,11 @@ Total: **176 tests** en 13 suites (85 hasta PHASE 1 + 47 de PHASE 1.1 + 44 de PH
 | `HandJointIdentityTests` (1.1) | 11 | 21 joints distintos, cadenas de los 5 dedos (wrist → punta, sin solapes), identidad de las 21 posiciones tras la conversión, cada cadena sigue su dedo, índice ≠ medio |
 | `PreviewGeometryTests` (1.1) | 11 | vertical (subir la mano = subir en pantalla), horizontal, espejo, letterbox lateral y superior/inferior, esquinas y bordes, entradas degeneradas, estabilidad con la distancia, transformación afín |
 | `HandPresenceFilterTests` (1.1) | 19 | 0/1/2 manos, máximo 2, orden determinista, baja confianza (mano y joints), joint requerido, detección parcial, mano diminuta, fuera de imagen, valores inválidos, falso positivo de un frame, pérdida inmediata, sin datos obsoletos, salida del frame actual, recuperación |
-| `CursorControllerTests` (2) | 27 | centro, bordes, esquinas, clamp, dirección Y, izquierda física, pantallas arbitrarias y desplazadas, puntos lógicos, sensibilidad, smoothing, dead zone, solo la mano primaria, sin mano, punta inválida, desactivado, pérdida inmediata, recuperación sin datos obsoletos y sin salto, determinismo, estados de activación, ajustes |
+| `CursorControllerTests` (2) | 27 | (2.1: cambia solo la aserción del smoothing por defecto 0.35 → 0.6) centro, bordes, esquinas, clamp, dirección Y, izquierda física, pantallas arbitrarias y desplazadas, puntos lógicos, sensibilidad, smoothing, dead zone, solo la mano primaria, sin mano, punta inválida, desactivado, pérdida inmediata, recuperación sin datos obsoletos y sin salto, determinismo, estados de activación, ajustes |
 | `DeadZoneFilterTests` (2) | 9 | bajo el umbral, exactamente en el umbral, sobre el umbral, dedo quieto con ruido, movimiento intencional sin retraso, reset, umbral limitado |
+| `AdaptiveCursorSmootherTests` (2.1) | 18 | quieto exacto, micro jitter, lento/normal/rápido, lag acotado, aceleración, deceleración y parada sin overshoot, inversión de dirección, independencia de FPS, determinismo, rango, reset, timestamps duplicados, hueco largo, saneo, equivalencia con la EMA de PHASE 2 |
+| `PointerTrackerTests` (2.1) | 24 | adquisición estricta, parcial e índice tras la adquisición, mano saliendo por abajo, índice aislado/parcial desconocido nunca activa, salto, baja confianza, obsoleto, chirality, geometría, coherencia, HOLD, timeouts, reacquisición completa, desactivado = PHASE 2, determinismo, saneo |
+| `CursorPointerIntegrationTests` (2.1) | 11 | modos que mueven el cursor, HOLD sin eventos ni glide, LOST borra la sesión, glide desde el cursor real, borde inferior alcanzable con la palma fuera, un frame perdido no reinicia |
 | `HandOrderingTests` (1.1) | 6 | 0/1/2 manos, izquierda → derecha independiente del orden de entrada, desempate por altura, centroide sin muñeca, descarte de manos vacías |
 
 ### Tests de drag (`GestureStateMachineTests`)
@@ -70,6 +73,7 @@ real de tests y builds es la del CI.
 | `b041b7e` | 85/85, 0 failures | 85/85, 0 failures | `** BUILD SUCCEEDED **`. Único warning: "Metadata extraction skipped. No AppIntents.framework dependency found." (benigno) |
 | `4b117fc` (1.1) | 132/132, 0 failures | 132/132, 0 failures | Build OK. Único warning: el mismo de AppIntents (benigno) |
 | `dad01ad` (2) | 176/176, 0 failures | 176/176, 0 failures | Build OK. Único warning: AppIntents (benigno) |
+| `9d20d76` (2.1) | 229/229, 0 failures | 229/229, 0 failures (Swift 6.4) | `** BUILD SUCCEEDED **`. Único warning: AppIntents (benigno) |
 
 ## Validación manual — DEFERRED TO LOCAL MAC VALIDATION
 
@@ -91,6 +95,7 @@ La checklist detallada (qué hacer y qué esperar) está en `MACOS_SETUP.md`, se
 - [ ] Sin errores repetitivos en el log
 
 PHASE 2 (cursor): pruebas A–L en `PHASE2_RESULT.md` §15 y `MACOS_SETUP.md` §P.
+PHASE 2.1 (cursor adaptativo y tracking periférico): pruebas A–N en `PHASE2_1_RESULT.md` §9.
 
 Pendientes de fases posteriores:
 - [ ] Click, double click y drag reales (PHASE 3)

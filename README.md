@@ -9,13 +9,15 @@ cursor, click, doble click, drag y scroll. Todo se procesa en local, sin interne
 |---|---|
 | PHASE 0: Core + Architecture | **COMPLETE** |
 | PHASE 1: macOS Foundation + Camera + Vision Hand Tracking | Validada en el Mac real (PHASE 1.1, [resultado](PHASE1_1_RESULT.md)) |
-| PHASE 2: Cursor Control | **READY FOR LOCAL VALIDATION**: implementada y verificada en CI; falta la prueba física ([resultado](PHASE2_RESULT.md)) |
+| PHASE 2: Cursor Control | Validada en el Mac (G, H, J, L parciales → PHASE 2.1) ([resultado](PHASE2_RESULT.md)) |
+| PHASE 2.1: Adaptive Cursor & Peripheral Tracking | **READY FOR LOCAL VALIDATION**: implementada y verificada en CI; falta la prueba física ([resultado](PHASE2_1_RESULT.md)) |
 | PHASE 3–7+ | NOT STARTED |
 
 Lo que hace la app hoy: abre la cámara, detecta hasta dos manos con Vision, dibuja sus 21
 landmarks sobre el preview y, **si activas "Cursor Control"** (y das permiso de
-Accesibilidad), el índice de la mano primaria mueve el cursor del Mac. **Todavía no hace
-click, drag ni scroll** (PHASE 3+).
+Accesibilidad), el índice de la mano primaria mueve el cursor del Mac, con suavizado que se
+adapta a la velocidad y seguimiento del índice cerca de los bordes de la imagen (PHASE 2.1).
+**Todavía no hace click, drag ni scroll** (PHASE 3+).
 
 ## Estructura
 
@@ -28,12 +30,15 @@ click, drag ni scroll** (PHASE 3+).
 | `PHASE1_PROMPT.md`, `PHASE1_1_PROMPT.md` | Especificaciones de PHASE 1 y 1.1. |
 | `PHASE1_1_RESULT.md` | Diagnóstico y correcciones de PHASE 1.1. |
 | `PHASE2_PROMPT.md`, `PHASE2_RESULT.md` | Especificación y resultado de PHASE 2 (cursor). |
+| `PHASE2_1_PROMPT.md`, `PHASE2_1_RESULT.md` | Especificación y resultado de PHASE 2.1 (cursor adaptativo, tracking periférico). |
 
 ## Pipeline
 
 ```text
-AVCaptureSession → CameraFrame → Vision → HandStateMapper → HandPresenceFilter → [HandState]
-      → CursorController (Core) → MacOSEventController → CGEvent .mouseMoved → cursor
+AVCaptureSession → CameraFrame → Vision → HandStateMapper → [HandState] candidatos
+      → PointerTracker (Core: HandPresenceFilter estricto + continuidad FULL/PARTIAL/INDEX/HOLD/LOST)
+      → CursorController (Core: dead zone, sensibilidad, smoothing adaptativo)
+      → MacOSEventController → CGEvent .mouseMoved → cursor
       → Debug UI (preview + overlay + panel)
 ```
 
@@ -43,7 +48,7 @@ Requiere Xcode 16+ y macOS 14+.
 
 ```bash
 git checkout claude/gifted-carson-iyjqxg && git pull
-cd AirTrackCore && swift test && cd ..        # 176 tests, 0 failures
+cd AirTrackCore && swift test && cd ..        # 229 tests, 0 failures
 open AirTrack/AirTrack.xcodeproj               # luego ⌘R
 ```
 
