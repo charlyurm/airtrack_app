@@ -15,15 +15,43 @@ adaptador entre el hardware y AirTrackCore.
 | Conversión Vision → HandState (`LandmarkCoordinateConversion`) | Permiso de cámara: `Permissions/` |
 | Esqueleto de la mano (`HandSkeleton`) | Preview + overlay de debug: `UI/` |
 | Validación y orden de manos (`HandPresenceFilter`, `HandOrdering`) | Logging (`os.Logger`): `Utilities/` |
-| Cursor, smoothing, pinch, gestos, calibración | *Futuro:* CGEvent, Accesibilidad, atajo global, menu bar, UserDefaults |
+| Cursor: `CursorController`, `CursorControlState`, `DeadZoneFilter`, `CursorMapper`, `CursorSmoother`, `ScreenMapper` | Cursor: `Events/MacOSEventController` (CGEvent `.mouseMoved`), `Permissions/AccessibilityPermissionManager` |
+| Pinch, gestos (PHASE 3), calibración | *Futuro:* click/drag/scroll, atajo global, menu bar, UserDefaults |
 | Tests (sin hardware; macOS y Linux) | |
 
 **Regla:** AirTrackCore solo importa `Foundation`. Nunca AVFoundation, Vision, AppKit,
 CoreGraphics ni SwiftUI. El job de Linux del CI falla si alguien rompe esta regla.
 
 ```text
-macOS / Vision  ──HandState──▶  AirTrackCore  ──[InteractionAction]──▶  macOS events (PHASE 2+)
+macOS / Vision  ──HandState──▶  AirTrackCore  ──CursorUpdate (PHASE 2) / [InteractionAction] (PHASE 3+)──▶  MacOSEventController
 ```
+
+## Pipeline del cursor (PHASE 2)
+
+```text
+HandPresenceFilter → [HandState] (primaria primero, solo del frame actual)
+   │  visionQueue, mismo hilo que Vision: sin colas ni timers nuevos
+   ▼
+CursorController (Core)
+   hands.first → indexTip (conf ≥ 0.3) → espejo → active area → DeadZoneFilter
+   → sensibilidad → CursorSmoother (EMA) → blend de reacquisición → ScreenMapper
+   ▼  CursorUpdate? (nil = no mover)
+MacOSEventController → CGEvent(.mouseMoved).post(.cghidEventTap)
+```
+
+- **Solo se ejecuta si el main actor lo permite:** Cursor Control activado, sin pausa,
+  permiso de Accesibilidad concedido y cámara en `RUNNING` (`HandTrackingPipeline.setCursorControl`).
+  Si no, el controlador se reinicia en cada frame y no se publica nada.
+- **Estado para la UI:** `CursorControlState` = off / paused / waitingForPermission / waitingForHand / active.
+- **Pantalla:** `CGDisplayBounds(CGMainDisplayID())`, en coordenadas globales CG (puntos,
+  origen arriba-izquierda, Y hacia abajo), la misma convención que `ScreenMapper`. Solo la
+  pantalla principal.
+- **Sin datos obsoletos:** un frame sin mano primaria válida devuelve `nil` y borra el
+  smoothing, la dead zone y el blend. La siguiente sesión parte de la posición real del cursor
+  (`CGEvent(source: nil).location`) y se desliza hacia el dedo en 0.2 s.
+- `GestureEngine` (pinch/click) sigue sin conectar; PHASE 3 lo compondrá con `CursorController`.
+
+Detalle completo: `PHASE2_RESULT.md`.
 
 ## Pipeline de PHASE 1 / 1.1
 
@@ -62,11 +90,13 @@ En PHASE 1 `HandState` todavía no pasa por `GestureEngine`: no hay cursor ni ev
 | `Permissions/CameraPermissionManager.swift` | Permiso de cámara |
 | `Vision/VisionHandTrackingEngine.swift` | Petición de Vision (hasta 2 manos) → candidatos |
 | `Vision/HandStateMapper.swift` | Tabla explícita Vision → `HandJoint` y conversión a `HandState` |
-| `Vision/HandTrackingPipeline.swift` | Buzón latest-frame-wins, filtro de presencia, métricas, logs |
+| `Vision/HandTrackingPipeline.swift` | Buzón latest-frame-wins, filtro de presencia, cursor (PHASE 2), métricas, logs |
+| `Events/MacOSEventController.swift` | Pantalla principal, posición actual del cursor, `CGEvent .mouseMoved` (**solo mover**) |
+| `Permissions/AccessibilityPermissionManager.swift` | Permiso de Accesibilidad (comprobar, pedir una vez, abrir Configuración) |
 | `App/AppModel.swift` | Estado de la UI (`@MainActor @Observable`) |
 | `UI/CameraPreviewView.swift` | Solo video (`AVCaptureVideoPreviewLayer`, `.resizeAspect`, espejo) |
 | `UI/HandDebugOverlay.swift` | Landmarks en SwiftUI `Canvas`, un color por dedo |
-| `UI/TrackingStatusView.swift` | Panel de diagnóstico |
+| `UI/TrackingStatusView.swift` | Panel de diagnóstico + sección Cursor (interruptor, estado, permiso, pausa ⌃⌥⌘A, sliders) |
 
 ## Identidad de los landmarks (tabla explícita)
 
@@ -99,7 +129,8 @@ arriba-izquierda, Y hacia abajo, sin espejo**. `HandState` la usa, y el overlay 
 | `HandState` | arriba-izq / abajo | **no** | — | frontera con Core |
 | Overlay (SwiftUI) | arriba-izq / abajo, en puntos | opcional (`x' = 1 − x`) | rect letterbox + espejo | `PreviewGeometry` (Core) |
 | Preview de video | lo gestiona AVFoundation | igual que el overlay | `.resizeAspect` | `CameraPreviewView` |
-| Display normalizado / global CG | arriba-izq / abajo | — | — | PHASE 2+ |
+| Cursor (espejado, active area) | arriba-izq / abajo | **sí** (`mirrorCamera`), una vez | `CursorMapper` | PHASE 2 |
+| Display normalizado / global CG (puntos) | arriba-izq / abajo | — | `ScreenMapper` | PHASE 2 (`CGEvent`) |
 
 - **Letterboxing:** `.resizeAspect` escala la imagen para que quepa y la centra.
   `PreviewGeometry.aspectFitRect` reproduce ese rectángulo a partir del tamaño de la vista
@@ -195,7 +226,7 @@ visionQueue        Vision + HandPresenceFilter → TrackingResult
 | `Models/` | `HandJoint`, `Finger`, `HandSkeleton`, `HandChirality`, `HandState`, `InteractionAction`, `AirTrackSettings`, `KeyboardShortcut`, `LandmarkCoordinateConversion` |
 | `Geometry/` | `Point2D`, `Rect2D`, `PreviewGeometry` |
 | `Tracking/` | `HandValidation`, `HandPresenceFilter`, `HandOrdering` |
-| `Cursor/` | `CursorMapper`, `CursorSmoother`, `ScreenMapper` |
+| `Cursor/` | `CursorController`, `CursorControlState`, `DeadZoneFilter`, `CursorMapper`, `CursorSmoother`, `ScreenMapper` |
 | `Gestures/` | `HandScale`, `PinchRecognizer`, `GestureStateMachine`, `GestureEngine` |
 | `Calibration/` | `ActiveAreaCalibration` |
 
@@ -221,3 +252,7 @@ visionQueue        Vision + HandPresenceFilter → TrackingResult
 | Vision clásico (`VNDetectHumanHandPoseRequest`) | Compatible con macOS 14 | Revisable |
 | Firma ad-hoc + entitlement de cámara, sin sandbox | Ejecución local | MVP |
 | Latencia del pinch en 2 frames, EMA por frame | Ver `GESTURES.md` | Provisional |
+| Cursor en la cola de Vision, con `CGEvent .mouseMoved` (no `CGWarpMouseCursorPosition`) | Mínima latencia; las apps reciben eventos de movimiento normales | PHASE 2 |
+| Dead zone con ancla antes de la sensibilidad | Estabilidad sin retraso durante el movimiento; el umbral no depende de la sensibilidad | PHASE 2, umbral sin calibrar |
+| Recuperación con blend desde el cursor real | Sin saltos y sin datos obsoletos | PHASE 2 |
+| Cursor Control apagado al arrancar | Detectar una mano nunca mueve el cursor por sí solo | PHASE 2 |

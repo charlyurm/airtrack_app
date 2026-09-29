@@ -10,19 +10,25 @@ Vision puede detectar hasta 2 manos (PHASE 1.1). Los gestos usan solo la **mano 
 la primera en el orden determinista de `HandOrdering` (la más a la izquierda en la imagen
 real, que en el preview espejado se ve a la derecha). Los gestos de dos manos son PHASE 7+.
 
-## Cursor (índice)
+## Cursor (índice) — PHASE 2
 
-1. `indexTip`, en coordenadas de cámara normalizadas.
-2. Espejo horizontal (`mirrorCamera`, por defecto activado).
-3. Zona activa (por defecto x 0.2–0.8, y 0.2–0.8) con `cursorSensitivity`
-   (1.0 por defecto; >1 reduce la zona).
-4. Normalización a 0…1 con clamp.
-5. EMA con `cursorSmoothing` (alpha 0.5 por defecto; 0 = sin smoothing, máximo 0.95).
+Implementado en `CursorController` (ver `PHASE2_RESULT.md`). Solo mueve el cursor la mano
+primaria, y solo con Cursor Control activado.
 
-**Decisión provisional — smoothing por frame:** la EMA se aplica por frame, así que
-el lag efectivo depende del FPS (a 60 fps se suaviza "menos tiempo" que a 30). Mejora
-futura: **time-based smoothing**, para que 30/60/120 fps se sientan igual. No se
-implementa todavía.
+1. `indexTip` de la mano primaria (confianza ≥ 0.3), en la imagen real.
+2. Espejo horizontal (`mirrorCamera`, activo): la izquierda física del usuario es la izquierda del cursor.
+3. Active area (por defecto x e y 0.15–0.85, en el espacio espejado) → 0…1 sin clamp.
+4. Dead zone (`cursorDeadZone` 0.003 en unidades del área): ancla si el movimiento es ≤ umbral.
+5. Sensibilidad (`cursorSensitivity` 1.0): `0.5 + (n − 0.5)·s`, clamp 0…1.
+6. EMA (`cursorSmoothing` 0.35).
+7. Recuperación: parte de la posición real del cursor y se desliza en 0.2 s.
+8. `ScreenMapper` → puntos de la pantalla principal → `CGEvent .mouseMoved`.
+
+Todos los valores son iniciales y sin calibrar. El panel tiene sliders para sensibilidad,
+smoothing y dead zone.
+
+**Decisión provisional — smoothing por frame:** la EMA se aplica por frame, así que el lag
+efectivo depende del FPS. Mejora futura: **time-based smoothing**. No se implementa todavía.
 
 ## Pinch
 

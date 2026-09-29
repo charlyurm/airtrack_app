@@ -7,13 +7,13 @@ cd AirTrackCore
 swift test
 ```
 
-Total: **132 tests** en 11 suites (85 hasta PHASE 1 + 47 de PHASE 1.1).
+Total: **176 tests** en 13 suites (85 hasta PHASE 1 + 47 de PHASE 1.1 + 44 de PHASE 2).
 
 | Suite | Tests | Cubre |
 |---|---|---|
-| `CursorMapperTests` | 12 | espejo, zona activa, límites, sensibilidad, NaN, calibración de dos esquinas |
+| `CursorMapperTests` | 16 | espejo, zona activa, límites, sensibilidad, NaN, calibración de dos esquinas; (PHASE 2) normalización sin clamp, sensibilidad alrededor del centro, dos pasos ≡ área encogida, área por defecto |
 | `ScreenMapperTests` | 9 | esquinas, multi-monitor, orígenes negativos, conversión AppKit → global |
-| `CursorSmootherTests` | 7 | fórmula EMA, convergencia, reducción de jitter, reset, límites |
+| `CursorSmootherTests` | 11 | fórmula EMA, convergencia, reducción de jitter, reset, límites; (PHASE 2) reposo exacto, sin overshoot, retraso acotado, determinismo |
 | `PinchRecognizerTests` | 15 | pinch sí/no, invariancia a escala de mano, histéresis, spikes, ruido con semilla, aspect ratio, oclusión, confianza |
 | `GestureStateMachineTests` | 27 | click, ancla, drag sin salto, double click, tracking loss, pausa, re-armado |
 | `GestureEngineTests` | 8 | pipeline completo, pausa, reanudar con mano cerrada, reset al perder tracking, settings |
@@ -21,6 +21,8 @@ Total: **132 tests** en 11 suites (85 hasta PHASE 1 + 47 de PHASE 1.1).
 | `HandJointIdentityTests` (1.1) | 11 | 21 joints distintos, cadenas de los 5 dedos (wrist → punta, sin solapes), identidad de las 21 posiciones tras la conversión, cada cadena sigue su dedo, índice ≠ medio |
 | `PreviewGeometryTests` (1.1) | 11 | vertical (subir la mano = subir en pantalla), horizontal, espejo, letterbox lateral y superior/inferior, esquinas y bordes, entradas degeneradas, estabilidad con la distancia, transformación afín |
 | `HandPresenceFilterTests` (1.1) | 19 | 0/1/2 manos, máximo 2, orden determinista, baja confianza (mano y joints), joint requerido, detección parcial, mano diminuta, fuera de imagen, valores inválidos, falso positivo de un frame, pérdida inmediata, sin datos obsoletos, salida del frame actual, recuperación |
+| `CursorControllerTests` (2) | 27 | centro, bordes, esquinas, clamp, dirección Y, izquierda física, pantallas arbitrarias y desplazadas, puntos lógicos, sensibilidad, smoothing, dead zone, solo la mano primaria, sin mano, punta inválida, desactivado, pérdida inmediata, recuperación sin datos obsoletos y sin salto, determinismo, estados de activación, ajustes |
+| `DeadZoneFilterTests` (2) | 9 | bajo el umbral, exactamente en el umbral, sobre el umbral, dedo quieto con ruido, movimiento intencional sin retraso, reset, umbral limitado |
 | `HandOrderingTests` (1.1) | 6 | 0/1/2 manos, izquierda → derecha independiente del orden de entrada, desempate por altura, centroide sin muñeca, descarte de manos vacías |
 
 ### Tests de drag (`GestureStateMachineTests`)
@@ -67,6 +69,7 @@ real de tests y builds es la del CI.
 |---|---|---|---|
 | `b041b7e` | 85/85, 0 failures | 85/85, 0 failures | `** BUILD SUCCEEDED **`. Único warning: "Metadata extraction skipped. No AppIntents.framework dependency found." (benigno) |
 | `4b117fc` (1.1) | 132/132, 0 failures | 132/132, 0 failures | Build OK. Único warning: el mismo de AppIntents (benigno) |
+| `dad01ad` (2) | 176/176, 0 failures | 176/176, 0 failures | Build OK. Único warning: AppIntents (benigno) |
 
 ## Validación manual — DEFERRED TO LOCAL MAC VALIDATION
 
@@ -87,7 +90,8 @@ La checklist detallada (qué hacer y qué esperar) está en `MACOS_SETUP.md`, se
 - [ ] Camera FPS, Vision FPS, Vision processing y Capture → HandState con valores plausibles
 - [ ] Sin errores repetitivos en el log
 
+PHASE 2 (cursor): pruebas A–L en `PHASE2_RESULT.md` §15 y `MACOS_SETUP.md` §P.
+
 Pendientes de fases posteriores:
-- [ ] Cursor con baja latencia y bajo jitter (PHASE 2)
 - [ ] Click, double click y drag reales (PHASE 3)
 - [ ] Calibración de los umbrales de pinch con manos reales

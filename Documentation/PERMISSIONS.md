@@ -25,10 +25,16 @@ Flujo (`Permissions/CameraPermissionManager.swift` + `App/AppModel.swift`):
 Para repetir el flujo desde cero en desarrollo:
 `tccutil reset Camera com.airtrack.AirTrack`
 
-## Accesibilidad (PHASE 2: no implementado)
+## Accesibilidad (PHASE 2: implementado, DEFERRED TO LOCAL MAC VALIDATION)
 
-- Se verificará con `AXIsProcessTrusted()` / `CGPreflightPostEventAccess()` y se pedirá
-  con `AXIsProcessTrustedWithOptions` / `CGRequestPostEventAccess()`.
+Necesaria para mover el cursor (publicar `CGEvent`). `Permissions/AccessibilityPermissionManager.swift`:
+- Comprobación: `CGPreflightPostEventAccess()`, al activar Cursor Control y luego cada segundo
+  (si se revoca, el cursor deja de moverse).
+- Solicitud: `CGRequestPostEventAccess()` **solo al pulsar "Conceder permiso"** y como máximo
+  una vez por sesión; después, el botón abre Configuración del Sistema → Privacidad y
+  seguridad → Accesibilidad. Nunca se pide en bucle.
+- Sin permiso: `Permission: REQUIRED`, `Cursor: WAITING FOR PERMISSION`, no se publica ningún evento.
+- Reiniciar el flujo: `tccutil reset Accessibility com.airtrack.AirTrack`.
 - La app no puede concederse el permiso sola: el usuario lo activa en Configuración del
   Sistema → Privacidad y seguridad → Accesibilidad.
 - Texto obligatorio: "AirTrack necesita permiso de Accesibilidad para controlar el

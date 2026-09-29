@@ -133,7 +133,8 @@ AirTrack/
 │   │   │                  LandmarkCoordinateConversion
 │   │   ├── Geometry/      Point2D, Rect2D, PreviewGeometry
 │   │   ├── Tracking/      HandValidation, HandPresenceFilter, HandOrdering
-│   │   ├── Cursor/        CursorMapper, CursorSmoother, ScreenMapper
+│   │   ├── Cursor/        CursorController, CursorControlState, DeadZoneFilter,
+│   │   │                  CursorMapper, CursorSmoother, ScreenMapper
 │   │   ├── Gestures/      HandScale, PinchRecognizer,
 │   │   │                  GestureStateMachine, GestureEngine
 │   │   └── Calibration/   ActiveAreaCalibration
@@ -148,7 +149,9 @@ AirTrack/
 │       ├── HandJointIdentityTests.swift
 │       ├── PreviewGeometryTests.swift
 │       ├── HandPresenceFilterTests.swift
-│       └── HandOrderingTests.swift
+│       ├── HandOrderingTests.swift
+│       ├── CursorControllerTests.swift
+│       └── DeadZoneFilterTests.swift
 │
 ├── AirTrack/                          ← macOS app (Phase 1): hardware + UI only
 │   ├── AirTrack.xcodeproj
@@ -157,13 +160,14 @@ AirTrack/
 │       ├── App/          AirTrackApp (+ AppDelegate), AppModel
 │       ├── Camera/       CameraManager, CameraFrame, CameraStatus
 │       ├── Vision/       VisionHandTrackingEngine, HandStateMapper, HandTrackingPipeline
-│       ├── Permissions/  CameraPermissionManager   (the ONLY camera-permission type)
+│       ├── Events/       MacOSEventController      (Phase 2: mouse-moved only)
+│       ├── Permissions/  CameraPermissionManager   (the ONLY camera-permission type),
+│       │                 AccessibilityPermissionManager (Phase 2)
 │       ├── UI/           ContentView, CameraPreviewView, HandDebugOverlay, TrackingStatusView
 │       └── Utilities/    Logging, FrameRateCounter
 │
-│   Planned (not created yet): Cursor/CursorController, Events/MacOSEventController
-│   (Phase 2–4), Permissions/AccessibilityPermission (Phase 2), menu bar, settings and
-│   calibration UI (Phase 5).
+│   Planned (not created yet): click/drag/scroll events (Phase 3–4), menu bar, settings
+│   and calibration UI, global shortcut (Phase 5).
 │
 ├── Documentation/
 │   ├── ARCHITECTURE.md

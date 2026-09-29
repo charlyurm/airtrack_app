@@ -8,13 +8,14 @@ cursor, click, doble click, drag y scroll. Todo se procesa en local, sin interne
 | Fase | Estado |
 |---|---|
 | PHASE 0: Core + Architecture | **COMPLETE** |
-| PHASE 1: macOS Foundation + Camera + Vision Hand Tracking | **IN PROGRESS**: PHASE 1.1 (correcciones tras la prueba en el Mac real) implementada; falta la validación física ([resultado](PHASE1_1_RESULT.md)) |
-| PHASE 2: Cursor Control | NOT STARTED |
+| PHASE 1: macOS Foundation + Camera + Vision Hand Tracking | Validada en el Mac real (PHASE 1.1, [resultado](PHASE1_1_RESULT.md)) |
+| PHASE 2: Cursor Control | **READY FOR LOCAL VALIDATION**: implementada y verificada en CI; falta la prueba física ([resultado](PHASE2_RESULT.md)) |
 | PHASE 3–7+ | NOT STARTED |
 
-Lo que hace la app hoy: abre la cámara, detecta hasta dos manos con Vision y dibuja sus
-21 landmarks sobre el preview (un color por dedo), con el estado del tracking y FPS. **Todavía no mueve el
-cursor.**
+Lo que hace la app hoy: abre la cámara, detecta hasta dos manos con Vision, dibuja sus 21
+landmarks sobre el preview y, **si activas "Cursor Control"** (y das permiso de
+Accesibilidad), el índice de la mano primaria mueve el cursor del Mac. **Todavía no hace
+click, drag ni scroll** (PHASE 3+).
 
 ## Estructura
 
@@ -25,14 +26,15 @@ cursor.**
 | `Documentation/` | Arquitectura, gestos, permisos, testing, roadmap y setup en Mac. |
 | `AIRTRACK_PROJECT_STRUCTURE.md` | Documento maestro de arquitectura, con las enmiendas aprobadas. |
 | `PHASE1_PROMPT.md`, `PHASE1_1_PROMPT.md` | Especificaciones de PHASE 1 y 1.1. |
-| `PHASE1_1_RESULT.md` | Diagnóstico, correcciones y validación pendiente de PHASE 1.1. |
+| `PHASE1_1_RESULT.md` | Diagnóstico y correcciones de PHASE 1.1. |
+| `PHASE2_PROMPT.md`, `PHASE2_RESULT.md` | Especificación y resultado de PHASE 2 (cursor). |
 
 ## Pipeline
 
 ```text
-AVCaptureSession → CameraFrame → Vision → HandStateMapper → HandState → Debug UI
-                                                                 │
-                                         (PHASE 2+) AirTrackCore → InteractionAction → eventos macOS
+AVCaptureSession → CameraFrame → Vision → HandStateMapper → HandPresenceFilter → [HandState]
+      → CursorController (Core) → MacOSEventController → CGEvent .mouseMoved → cursor
+      → Debug UI (preview + overlay + panel)
 ```
 
 ## Empezar en un Mac
@@ -41,7 +43,7 @@ Requiere Xcode 16+ y macOS 14+.
 
 ```bash
 git checkout claude/gifted-carson-iyjqxg && git pull
-cd AirTrackCore && swift test && cd ..        # 132 tests, 0 failures
+cd AirTrackCore && swift test && cd ..        # 176 tests, 0 failures
 open AirTrack/AirTrack.xcodeproj               # luego ⌘R
 ```
 

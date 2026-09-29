@@ -18,7 +18,7 @@ Guía para compilar, ejecutar y validar AirTrack en un Mac real.
 | macOS | 14 Sonoma o superior | Deployment target de la app (`@Observable`, tipos de cámara modernos) |
 | Xcode | **16 o superior**, instalación completa | El proyecto usa grupos sincronizados con carpetas (objectVersion 77), que requieren Xcode 16. Swift 6. |
 | Cámara | Integrada, USB o Continuity Camera | Captura de la mano |
-| Permisos | Cámara | Lo concede el usuario (H). Accesibilidad llega en PHASE 2. |
+| Permisos | Cámara y Accesibilidad | Los concede el usuario (H, I) |
 
 ```bash
 uname -m              # esperado: arm64
@@ -66,7 +66,7 @@ Lógica pura (solo Foundation). La app lo consume como paquete local
 
 ```bash
 cd AirTrackCore
-swift test          # esperado: 0 failures (el total está en TESTING.md)
+swift test          # esperado: Executed 176 tests, with 0 failures
 ```
 
 ## F. Abrir el proyecto
@@ -94,9 +94,16 @@ Ya configurado:
 
 Al abrir la app por primera vez, macOS muestra el diálogo de permiso.
 
-## I. Accesibilidad
+## I. Accesibilidad (PHASE 2, cursor)
 
-**No se usa en PHASE 1.** Llega en PHASE 2 (cursor).
+Hace falta para que el índice mueva el cursor. En el panel, sección **Cursor**:
+1. Activa **Cursor Control**. Sin permiso verás `Permission: REQUIRED`.
+2. Pulsa **Conceder permiso**: macOS muestra su diálogo una sola vez.
+3. En Configuración del Sistema → Privacidad y seguridad → **Accesibilidad**, activa AirTrack.
+4. Vuelve a la app: en ≤ 1 s aparece `Permission: READY`.
+
+Si tras recompilar macOS "olvida" el permiso (firma ad-hoc): quita AirTrack de la lista con
+"−" y vuelve a añadirlo, o ejecuta `tccutil reset Accessibility com.airtrack.AirTrack`.
 
 ## J. Firma y entitlements
 
@@ -150,6 +157,17 @@ blanca con la etiqueta "1" o "2" (+ L/R si Vision informa chirality).
 **Qué reportar:** el resultado de cada fila (OK / falla + descripción), una captura con la
 mano abierta y los valores de la fila H. Si algo falla, di la dirección exacta (por ejemplo,
 "la punta verde cae en el dedo medio" o "al subir la mano, y sube").
+
+## P. Validación de PHASE 2 (cursor)
+
+Las 12 pruebas A–L, con lo que debes ver en cada una, están en `PHASE2_RESULT.md` §15.
+Resumen: activa Cursor Control → el índice de la mano "1" mueve el cursor. Comprueba centro,
+horizontal, **vertical (sin inversión)**, esquinas, quietud, rapidez, distancia, que al sacar
+la mano el cursor se detenga, que al volver no salte, que la mano "2" no mueva nada y que
+fuera del rectángulo discontinuo el cursor quede en el borde.
+
+Para soltar el cursor: saca la mano del cuadro, pulsa **Pausar** (⌃⌥⌘A con AirTrack en
+primer plano) o apaga Cursor Control.
 
 ## N. Logs
 

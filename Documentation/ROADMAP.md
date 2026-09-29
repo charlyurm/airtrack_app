@@ -6,15 +6,15 @@ y Hand Tracking como fases separadas):
 | Fase | Contenido | Estado |
 |---|---|---|
 | **PHASE 0** | Core + Architecture | **COMPLETE** |
-| **PHASE 1** | macOS Foundation + Camera + Vision Hand Tracking | **IN PROGRESS**: 1.1 (correcciones tras la prueba en el Mac real) implementada; falta la validación física |
-| PHASE 2 | Cursor Control | NOT STARTED |
+| **PHASE 1** | macOS Foundation + Camera + Vision Hand Tracking | **VALIDATED on the real Mac** (PHASE 1.1) |
+| **PHASE 2** | Cursor Control | **READY FOR LOCAL VALIDATION**: implementada, CI en verde; falta la prueba física (`PHASE2_RESULT.md`) |
 | PHASE 3 | Click / Double Click / Drag | NOT STARTED |
 | PHASE 4 | Scroll | NOT STARTED |
 | PHASE 5 | Menu Bar / Settings / Calibration | NOT STARTED |
 | PHASE 6 | Optimization | NOT STARTED |
 | PHASE 7+ | Advanced Gestures | NOT STARTED |
 
-PHASE 2 y PHASE 3 figuran como NOT STARTED aunque su lógica ya existe en AirTrackCore:
+PHASE 3 figura como NOT STARTED aunque parte de su lógica (pinch, máquina de click/drag) ya existe en AirTrackCore:
 una fase se completa cuando funciona en un Mac real, no cuando existen tests.
 
 ## Flujo de trabajo
@@ -49,7 +49,19 @@ falsos positivos a ~20 cm. PHASE 1.1 los aborda (ver `PHASE1_1_RESULT.md`).
 | Dos manos representadas | ⏳ implementado en 1.1, DEFERRED |
 | Rendimiento aceptable | ⏳ DEFERRED (latest-frame-wins nuevo) |
 
-PHASE 2 no empieza hasta que el usuario confirme todos estos puntos en el Mac.
+Resultado: el usuario confirmó en el Mac la identidad de los landmarks, la vertical, la estabilidad con la distancia, las dos manos, LOST/recovery, el filtrado y el rendimiento (~30 FPS, Vision ~11 ms, Capture → HandState ~46 ms, Camera drops 0). PHASE 1 queda validada.
+
+## PHASE 2: estado de validación
+
+| Criterio | Estado |
+|---|---|
+| Matemática del cursor (mapeo, Y, clamp, active area, sensibilidad, smoothing, dead zone) | ✅ tests (176/176) |
+| Pérdida y recuperación seguras, solo la mano primaria, estado desactivado | ✅ tests |
+| `CGEvent` aislado en la app; Core solo usa Foundation | ✅ revisión + job Linux |
+| La app compila | ✅ CI `xcodebuild` |
+| Pruebas A–L en el Mac (`PHASE2_RESULT.md` §15) | ⏳ DEFERRED TO LOCAL MAC VALIDATION |
+
+PHASE 3 no empieza hasta que el usuario confirme A–L en el Mac.
 
 ## Definición de done del MVP
 
@@ -79,6 +91,8 @@ PHASE 2 no empieza hasta que el usuario confirme todos estos puntos en el Mac.
 | Latencia del pinch | 2 frames de confirmación (~33 ms a 30 fps) | Menos frames, confirmación por timestamps, predicción, otro filtro |
 | Smoothing | EMA por frame | **Time-based smoothing** (misma sensación a 30/60/120 fps); filtro One Euro si las mediciones lo justifican |
 | Umbrales de pinch | Ratios 0.25 / 0.35, no calibrados | Calibración por usuario (PHASE 5) |
+| Cursor | Active area 0.15–0.85, sensibilidad 1, smoothing 0.35, dead zone 0.003, blend 0.2 s (sliders sin persistir) | Calibración y persistencia (PHASE 5) |
+| Atajo de pausa | ⌃⌥⌘A solo con AirTrack en primer plano | Atajo global (PHASE 5) |
 | Referencia de tamaño de mano | wrist → indexMCP (2D) | Otro segmento rígido si la rotación de la mano lo vuelve inestable |
 | Resolución de captura | 1280×720 | Bajarla si Vision es lento; subirla si falta precisión |
 | Multi-monitor | Un display objetivo | Mapeo sobre varios displays |
